@@ -1,4 +1,5 @@
 import type { IconName } from "@/components/ui/Icon";
+import type { Id } from "@/convex/_generated/dataModel";
 
 export const DEFAULT_TIMEZONE = "America/Chicago";
 
@@ -12,6 +13,7 @@ export const NAV_ITEMS: ReadonlyArray<{ href: string; label: string; icon: IconN
   { href: "/", label: "Kanban", icon: "view_kanban" },
   { href: "/today", label: "Today", icon: "wb_sunny" },
   { href: "/calendar", label: "Calendar", icon: "calendar_today" },
+  { href: "/team", label: "Team", icon: "groups" },
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
@@ -66,4 +68,6 @@ export interface TaskFormData {
   dueTime?: string;
   recurring?: Recurring;
   notes?: string;
+  /** Set to null for unassigned; omit only when not changing (not used in current form flow). */
+  assignedStaffId?: Id<"staffMembers"> | null;
 }

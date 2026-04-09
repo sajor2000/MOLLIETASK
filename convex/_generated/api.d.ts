@@ -13,6 +13,7 @@ import type * as authHelpers from "../authHelpers.js";
 import type * as authInternal from "../authInternal.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
+import type * as practiceTeamPreset from "../practiceTeamPreset.js";
 import type * as pushActions from "../pushActions.js";
 import type * as pushNotifications from "../pushNotifications.js";
 import type * as rateLimit from "../rateLimit.js";
@@ -40,6 +41,7 @@ declare const fullApi: ApiFromModules<{
   authInternal: typeof authInternal;
   crons: typeof crons;
   http: typeof http;
+  practiceTeamPreset: typeof practiceTeamPreset;
   pushActions: typeof pushActions;
   pushNotifications: typeof pushNotifications;
   rateLimit: typeof rateLimit;

@@ -142,6 +142,67 @@ export async function deleteTaskAttachments(
   }
 }
 
+// ── Shared task insertion helper ─────────────────────
+
+export async function insertTaskCore(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  fields: {
+    title: string;
+    workstream: Doc<"tasks">["workstream"];
+    priority: Doc<"tasks">["priority"];
+    status: Doc<"tasks">["status"];
+    dueDate?: number;
+    dueTime?: string;
+    recurring?: Doc<"tasks">["recurring"];
+    notes?: string;
+    assignedStaffId?: Id<"staffMembers">;
+  },
+): Promise<Id<"tasks">> {
+  const trimmedTitle = fields.title.trim();
+  if (!trimmedTitle) throw new Error("Title is required");
+  if (trimmedTitle.length > 200) throw new Error("Title max 200 characters");
+  if (fields.notes && fields.notes.length > 2000)
+    throw new Error("Notes max 2000 characters");
+  if (fields.dueTime && !/^\d{2}:\d{2}$/.test(fields.dueTime))
+    throw new Error("dueTime must be HH:MM");
+
+  let assignedStaffId: Id<"staffMembers"> | undefined;
+  if (fields.assignedStaffId) {
+    if (!(await getStaffOwnedBy(ctx, fields.assignedStaffId, userId))) {
+      throw new Error("Invalid assignee");
+    }
+    assignedStaffId = fields.assignedStaffId;
+  }
+
+  const lastInColumn = await ctx.db
+    .query("tasks")
+    .withIndex("by_userId_status_sortOrder", (q) =>
+      q.eq("userId", userId).eq("status", fields.status),
+    )
+    .order("desc")
+    .first();
+  const sortOrder = lastInColumn ? lastInColumn.sortOrder + 1000 : 1000;
+
+  const taskId = await ctx.db.insert("tasks", {
+    userId,
+    title: trimmedTitle,
+    workstream: fields.workstream,
+    priority: fields.priority,
+    status: fields.status,
+    dueDate: fields.dueDate,
+    dueTime: fields.dueTime,
+    recurring: fields.recurring,
+    notes: fields.notes,
+    sortOrder,
+    createdAt: Date.now(),
+    ...(assignedStaffId ? { assignedStaffId } : {}),
+  });
+
+  await ctx.db.patch(userId, { lastUsedWorkstream: fields.workstream });
+  return taskId;
+}
+
 // ── Mutations ────────────────────────────────────────
 
 export const addTask = mutation({
@@ -160,40 +221,16 @@ export const addTask = mutation({
   returns: v.id("tasks"),
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-
-    if (args.title.length > 200) throw new Error("Title max 200 characters");
-    if (args.notes && args.notes.length > 2000)
-      throw new Error("Notes max 2000 characters");
-    if (args.dueTime && !/^\d{2}:\d{2}$/.test(args.dueTime))
-      throw new Error("dueTime must be HH:MM");
-
-    let assignedStaffId: typeof args.assignedStaffId;
-    if (args.assignedStaffId) {
-      if (!(await getStaffOwnedBy(ctx, args.assignedStaffId, userId))) {
-        throw new Error("Invalid assignee");
-      }
-      assignedStaffId = args.assignedStaffId;
-    } else {
-      assignedStaffId = undefined;
-    }
-
-    const existing = await ctx.db
-      .query("tasks")
-      .withIndex("by_userId_status_sortOrder", (q) =>
-        q.eq("userId", userId).eq("status", args.status),
-      )
-      .order("desc")
-      .first();
-
-    const sortOrder = existing ? existing.sortOrder + 1000 : 1000;
-
-    const { assignedStaffId: _a, ...rest } = args;
-    const taskId = await ctx.db.insert("tasks", {
-      ...rest,
-      userId,
-      sortOrder,
-      createdAt: Date.now(),
-      ...(assignedStaffId ? { assignedStaffId } : {}),
+    const taskId = await insertTaskCore(ctx, userId, {
+      title: args.title,
+      workstream: args.workstream,
+      priority: args.priority,
+      status: args.status,
+      dueDate: args.dueDate,
+      dueTime: args.dueTime,
+      recurring: args.recurring,
+      notes: args.notes,
+      assignedStaffId: args.assignedStaffId,
     });
 
     if (args.reminderAt) {
@@ -204,8 +241,6 @@ export const addTask = mutation({
       );
       await ctx.db.patch(taskId, { scheduledReminderId: scheduledId });
     }
-
-    await ctx.db.patch(userId, { lastUsedWorkstream: args.workstream });
 
     return taskId;
   },
@@ -476,16 +511,16 @@ export const deleteCompletedTasks = mutation({
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
 
+    const BATCH = 10;
     const completed = await ctx.db
       .query("tasks")
       .withIndex("by_userId_status_sortOrder", (q) =>
         q.eq("userId", userId).eq("status", "done"),
       )
-      .take(101);
+      .take(BATCH + 1);
 
-    const batch = completed.slice(0, 100);
+    const batch = completed.slice(0, BATCH);
     for (const task of batch) {
-      // Cascade-delete subtasks
       const subtasks = await ctx.db
         .query("subtasks")
         .withIndex("by_parentTaskId_and_sortOrder", (q) =>
@@ -500,7 +535,7 @@ export const deleteCompletedTasks = mutation({
     }
 
     // Schedule continuation server-side so client isn't blocked
-    if (completed.length > 100) {
+    if (completed.length > BATCH) {
       await ctx.scheduler.runAfter(0, internal.tasks.deleteCompletedTasksBatch, {
         userId,
       });
@@ -515,14 +550,15 @@ export const deleteCompletedTasksBatch = internalMutation({
   args: { userId: v.id("users") },
   returns: v.null(),
   handler: async (ctx, { userId }) => {
+    const BATCH = 10;
     const completed = await ctx.db
       .query("tasks")
       .withIndex("by_userId_status_sortOrder", (q) =>
         q.eq("userId", userId).eq("status", "done"),
       )
-      .take(101);
+      .take(BATCH + 1);
 
-    const batch = completed.slice(0, 100);
+    const batch = completed.slice(0, BATCH);
     for (const task of batch) {
       const subtasks = await ctx.db
         .query("subtasks")
@@ -537,7 +573,7 @@ export const deleteCompletedTasksBatch = internalMutation({
       await ctx.db.delete(task._id);
     }
 
-    if (completed.length > 100) {
+    if (completed.length > BATCH) {
       await ctx.scheduler.runAfter(0, internal.tasks.deleteCompletedTasksBatch, {
         userId,
       });
@@ -552,21 +588,34 @@ export const rebalanceSortOrders = internalMutation({
   args: {
     userId: v.id("users"),
     status: statusValidator,
+    startOffset: v.optional(v.number()),
   },
   returns: v.null(),
-  handler: async (ctx, { userId, status }) => {
+  handler: async (ctx, { userId, status, startOffset }) => {
+    const BATCH = 500;
+    const offset = startOffset ?? 0;
+
     const tasks = await ctx.db
       .query("tasks")
       .withIndex("by_userId_status_sortOrder", (q) =>
         q.eq("userId", userId).eq("status", status),
       )
-      .take(500);
+      .take(BATCH + 1);
 
-    for (let i = 0; i < tasks.length; i++) {
-      const newOrder = (i + 1) * 1000;
-      if (tasks[i].sortOrder !== newOrder) {
-        await ctx.db.patch(tasks[i]._id, { sortOrder: newOrder });
+    const batch = tasks.slice(0, BATCH);
+    for (let i = 0; i < batch.length; i++) {
+      const newOrder = (offset + i + 1) * 1000;
+      if (batch[i].sortOrder !== newOrder) {
+        await ctx.db.patch(batch[i]._id, { sortOrder: newOrder });
       }
+    }
+
+    if (tasks.length > BATCH) {
+      await ctx.scheduler.runAfter(0, internal.tasks.rebalanceSortOrders, {
+        userId,
+        status,
+        startOffset: offset + BATCH,
+      });
     }
     return null;
   },

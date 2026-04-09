@@ -1,22 +1,37 @@
 "use client";
 
-import { useState } from "react";
-import type { Doc } from "@/convex/_generated/dataModel";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import Link from "next/link";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 import type { Workstream, Priority, Recurring, TaskStatus, TaskFormData } from "@/lib/constants";
-import { WORKSTREAM_CONFIG, STATUS_CONFIG } from "@/lib/constants";
+import { STATUS_CONFIG } from "@/lib/constants";
 import { toDateInputValue, fromDateInputValue } from "@/lib/dates";
+import { staffLabel } from "@/lib/staffUtils";
+import { WorkstreamPicker, PriorityPicker, RecurringPicker } from "@/components/ui/FormToggles";
 import { TaskAttachments } from "./TaskAttachments";
 
 interface TaskFormProps {
   task?: Doc<"tasks"> | null;
   prefill?: Partial<TaskFormData>;
+  staffMembers?: Doc<"staffMembers">[];
+  /** When set, assignee digit hotkeys listen on this node only (task modal). */
+  hotkeyRoot?: HTMLElement | null;
   onSave: (data: TaskFormData) => void | Promise<void>;
   onDelete?: () => void;
   onClose: () => void;
   children?: React.ReactNode;
 }
 
-export function TaskForm({ task, prefill, onSave, onDelete, onClose, children }: TaskFormProps) {
+export function TaskForm({
+  task,
+  prefill,
+  staffMembers = [],
+  hotkeyRoot,
+  onSave,
+  onDelete,
+  onClose,
+  children,
+}: TaskFormProps) {
   const [title, setTitle] = useState(task?.title ?? prefill?.title ?? "");
   const [workstream, setWorkstream] = useState<Workstream>(
     task?.workstream ?? prefill?.workstream ?? "practice"
@@ -40,6 +55,52 @@ export function TaskForm({ task, prefill, onSave, onDelete, onClose, children }:
   );
   const [notes, setNotes] = useState(task?.notes ?? prefill?.notes ?? "");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [assignedStaffId, setAssignedStaffId] = useState<Id<"staffMembers"> | null>(
+    task?.assignedStaffId ?? prefill?.assignedStaffId ?? null,
+  );
+
+  useEffect(() => {
+    setAssignedStaffId(task?.assignedStaffId ?? prefill?.assignedStaffId ?? null);
+  }, [task?._id, task?.assignedStaffId, prefill?.assignedStaffId]);
+
+  const staffSlots = useMemo(
+    () => [...staffMembers].sort((a, b) => a.sortOrder - b.sortOrder).slice(0, 9),
+    [staffMembers],
+  );
+
+  const isTypingTarget = useCallback((el: EventTarget | null) => {
+    if (!el || !(el instanceof HTMLElement)) return false;
+    const tag = el.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+    return el.isContentEditable;
+  }, []);
+
+  useEffect(() => {
+    if (!hotkeyRoot || staffSlots.length === 0) return;
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (isTypingTarget(e.target)) return;
+
+      if (e.key === "0") {
+        e.preventDefault();
+        setAssignedStaffId(null);
+        return;
+      }
+
+      const digit = e.key.length === 1 ? e.key.charCodeAt(0) - 48 : -1;
+      if (digit >= 1 && digit <= 9) {
+        const idx = digit - 1;
+        if (idx < staffSlots.length) {
+          e.preventDefault();
+          setAssignedStaffId(staffSlots[idx]._id);
+        }
+      }
+    }
+
+    hotkeyRoot.addEventListener("keydown", onKeyDown, true);
+    return () => hotkeyRoot.removeEventListener("keydown", onKeyDown, true);
+  }, [hotkeyRoot, staffSlots, isTypingTarget]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -55,11 +116,10 @@ export function TaskForm({ task, prefill, onSave, onDelete, onClose, children }:
         dueTime: dueTime || undefined,
         recurring: dueDate ? recurring : undefined,
         notes: notes.trim() || undefined,
+        assignedStaffId,
       }),
     );
   }
-
-  const workstreamKeys = Object.keys(WORKSTREAM_CONFIG) as Workstream[];
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col h-full">
@@ -82,22 +142,7 @@ export function TaskForm({ task, prefill, onSave, onDelete, onClose, children }:
           <label className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
             Workstream
           </label>
-          <div className="flex gap-1 bg-bg-base rounded-[4px] p-1">
-            {workstreamKeys.map((ws) => (
-              <button
-                key={ws}
-                type="button"
-                onClick={() => setWorkstream(ws)}
-                className={`flex-1 py-1.5 text-[13px] rounded-[4px] transition-all duration-200 ${
-                  workstream === ws
-                    ? "bg-surface text-accent"
-                    : "text-text-muted hover:text-text-secondary"
-                }`}
-              >
-                {WORKSTREAM_CONFIG[ws].label}
-              </button>
-            ))}
-          </div>
+          <WorkstreamPicker value={workstream} onChange={setWorkstream} />
         </div>
 
         {/* Priority toggle */}
@@ -105,24 +150,7 @@ export function TaskForm({ task, prefill, onSave, onDelete, onClose, children }:
           <label className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
             Priority
           </label>
-          <div className="flex gap-1 bg-bg-base rounded-[4px] p-1">
-            {(["normal", "high"] as Priority[]).map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setPriority(p)}
-                className={`flex-1 py-1.5 text-[13px] rounded-[4px] transition-all duration-200 ${
-                  priority === p
-                    ? p === "high"
-                      ? "bg-destructive/15 text-destructive"
-                      : "bg-surface text-text-primary"
-                    : "text-text-muted hover:text-text-secondary"
-                }`}
-              >
-                {p === "high" ? "High" : "Normal"}
-              </button>
-            ))}
-          </div>
+          <PriorityPicker value={priority} onChange={setPriority} />
         </div>
 
         {/* Status — exclude "done" to prevent bypassing completeTaskCore */}
@@ -146,6 +174,48 @@ export function TaskForm({ task, prefill, onSave, onDelete, onClose, children }:
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Assignee */}
+        <div>
+          <label className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
+            Assigned to
+          </label>
+          {staffMembers.length === 0 ? (
+            <p className="text-[12px] text-text-muted py-1">
+              Add people on the{" "}
+              <Link href="/team" className="text-accent hover:underline">
+                Team
+              </Link>{" "}
+              page to assign tasks.
+            </p>
+          ) : (
+            <>
+              <select
+                value={assignedStaffId ?? ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const match = staffMembers.find((s) => s._id === val);
+                  setAssignedStaffId(match ? match._id : null);
+                }}
+                className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
+              >
+                <option value="">Unassigned</option>
+                {[...staffMembers]
+                  .sort((a, b) => a.sortOrder - b.sortOrder)
+                  .map((s) => (
+                    <option key={s._id} value={s._id}>
+                      {staffLabel(s)}
+                    </option>
+                  ))}
+              </select>
+              {staffSlots.length > 0 && (
+                <p className="text-[11px] text-text-muted mt-2 leading-relaxed">
+                  Keys 1–9 assign (order on Team page). 0 clears. Disabled while typing in a field.
+                </p>
+              )}
+            </>
+          )}
         </div>
 
         {/* Due date */}
@@ -205,22 +275,7 @@ export function TaskForm({ task, prefill, onSave, onDelete, onClose, children }:
             <label className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
               Repeat
             </label>
-            <div className="flex gap-1 bg-bg-base rounded-[4px] p-1">
-              {([undefined, "daily", "weekdays", "weekly", "monthly"] as const).map((r) => (
-                <button
-                  key={r ?? "none"}
-                  type="button"
-                  onClick={() => setRecurring(r)}
-                  className={`flex-1 py-1.5 text-[12px] rounded-[4px] transition-all duration-200 ${
-                    recurring === r
-                      ? "bg-surface text-accent"
-                      : "text-text-muted hover:text-text-secondary"
-                  }`}
-                >
-                  {r ? r.charAt(0).toUpperCase() + r.slice(1) : "None"}
-                </button>
-              ))}
-            </div>
+            <RecurringPicker value={recurring} onChange={setRecurring} />
           </div>
         )}
 

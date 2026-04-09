@@ -65,9 +65,24 @@ export default defineSchema({
     createdAt: v.number(),
     subtaskTotal: v.optional(v.number()),
     subtaskCompleted: v.optional(v.number()),
+    /** Practice staff row owned by userId; optional delegation label until staff login exists. */
+    assignedStaffId: v.optional(v.id("staffMembers")),
   })
     .index("by_userId_status_dueDate", ["userId", "status", "dueDate"])
-    .index("by_userId_status_sortOrder", ["userId", "status", "sortOrder"]),
+    .index("by_userId_status_sortOrder", ["userId", "status", "sortOrder"])
+    .index("by_userId_assignedStaffId", ["userId", "assignedStaffId"]),
+
+  /** Owner-managed roster; linkedUserId reserved for future staff Google sign-in. */
+  staffMembers: defineTable({
+    ownerUserId: v.id("users"),
+    name: v.string(),
+    roleTitle: v.string(),
+    /** Optional Meet-the-Team style bio (not shown on Kanban chips). */
+    bio: v.optional(v.string()),
+    sortOrder: v.number(),
+    linkedUserId: v.optional(v.id("users")),
+    createdAt: v.number(),
+  }).index("by_ownerUserId", ["ownerUserId"]),
 
   subtasks: defineTable({
     parentTaskId: v.id("tasks"),
@@ -107,4 +122,19 @@ export default defineSchema({
     timestamp: v.number(),
   })
     .index("by_userId_action", ["userId", "action", "timestamp"]),
+
+  taskTemplates: defineTable({
+    userId: v.id("users"),
+    category: v.string(),
+    title: v.string(),
+    workstream: workstreamValidator,
+    priority: priorityValidator,
+    recurring: v.optional(recurringValidator),
+    notes: v.optional(v.string()),
+    subtasks: v.optional(v.array(v.string())),
+    sortOrder: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_userId_category", ["userId", "category"])
+    .index("by_userId_category_sortOrder", ["userId", "category", "sortOrder"]),
 });

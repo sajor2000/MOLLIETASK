@@ -16,6 +16,7 @@ import { useTaskActions } from "@/hooks/useTaskActions";
 
 export default function TodayPage() {
   const tasks = useQuery(api.tasks.getTasksByStatus);
+  const staffList = useQuery(api.staff.listStaff);
   const {
     editingTask,
     setEditingTask,
@@ -136,6 +137,7 @@ export default function TodayPage() {
         <TaskDetailView
           task={editingTask}
           prefill={isCreating ? todayPrefill : undefined}
+          staffMembers={staffList ?? []}
           onSave={handleSave}
           onDelete={editingTask ? () => handleDelete(editingTask._id) : undefined}
           onClose={() => { setEditingTask(null); setIsCreating(false); }}

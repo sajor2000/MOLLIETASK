@@ -7,6 +7,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
 import { TaskDetailView } from "@/components/task/TaskDetailView";
 import { AiCaptureBar } from "@/components/task/AiCaptureBar";
+import { TemplateLibrary } from "@/components/task/TemplateLibrary";
 import { UndoToast } from "@/components/ui/UndoToast";
 import { ErrorToast } from "@/components/ui/ErrorToast";
 import type { Doc } from "@/convex/_generated/dataModel";
@@ -15,6 +16,7 @@ import { useTaskActions } from "@/hooks/useTaskActions";
 
 export default function KanbanPage() {
   const tasks = useQuery(api.tasks.getTasksByStatus);
+  const staffList = useQuery(api.staff.listStaff);
   const {
     editingTask,
     setEditingTask,
@@ -35,12 +37,21 @@ export default function KanbanPage() {
   // Kanban-specific state
   const [prefillData, setPrefillData] = useState<Partial<TaskFormData> | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showTemplates, setShowTemplates] = useState(false);
 
   const filteredTasks = useMemo(() => {
     if (!tasks || !searchQuery.trim()) return tasks;
     const q = searchQuery.toLowerCase();
     return tasks.filter((t) => t.title.toLowerCase().includes(q));
   }, [tasks, searchQuery]);
+
+  const staffKey = staffList?.map((s) => s._id).join(",") ?? "";
+  const staffById = useMemo(() => {
+    const m = new Map<string, Doc<"staffMembers">>();
+    for (const s of staffList ?? []) m.set(s._id, s);
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [staffKey]);
 
   const handleAiAddTask = (prefill: Partial<TaskFormData>) => {
     setPrefillData(prefill);
@@ -71,11 +82,13 @@ export default function KanbanPage() {
   return (
     <AppShell
       onAddTask={() => setIsCreating(true)}
+      onOpenTemplates={() => setShowTemplates(true)}
       searchQuery={searchQuery}
       onSearchChange={setSearchQuery}
       topBarExtra={
         <AiCaptureBar
           tasks={tasks}
+          staffMembers={staffList ?? []}
           onAddTask={handleAiAddTask}
           onEditTask={handleAiEditTask}
           onCompleteTask={handleComplete}
@@ -85,6 +98,7 @@ export default function KanbanPage() {
       <div className="h-[calc(100dvh-64px-56px)] md:h-[calc(100dvh-64px)]">
         <KanbanBoard
           tasks={filteredTasks ?? []}
+          staffById={staffById}
           onMoveTask={handleReorder}
           onEditTask={setEditingTask}
           onCompleteTask={handleComplete}
@@ -96,6 +110,7 @@ export default function KanbanPage() {
         <TaskDetailView
           task={editingTask}
           prefill={isCreating ? prefillData : undefined}
+          staffMembers={staffList ?? []}
           onSave={handleSave}
           onDelete={
             editingTask
@@ -116,6 +131,16 @@ export default function KanbanPage() {
 
       {errorMessage && !undoAction && (
         <ErrorToast message={errorMessage} onDismiss={clearError} />
+      )}
+
+      {showTemplates && (
+        <TemplateLibrary
+          onClose={() => setShowTemplates(false)}
+          onEditTask={(task) => {
+            setShowTemplates(false);
+            setEditingTask(task);
+          }}
+        />
       )}
     </AppShell>
   );

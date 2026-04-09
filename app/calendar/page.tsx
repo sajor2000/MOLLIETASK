@@ -22,6 +22,7 @@ const MONTHS = [
 
 export default function CalendarPage() {
   const tasks = useQuery(api.tasks.getTasksByStatus);
+  const staffList = useQuery(api.staff.listStaff);
   const {
     editingTask,
     setEditingTask,
@@ -270,6 +271,7 @@ export default function CalendarPage() {
         <TaskDetailView
           task={editingTask}
           prefill={createPrefill}
+          staffMembers={staffList ?? []}
           onSave={handleSave}
           onDelete={editingTask ? () => handleDelete(editingTask._id) : undefined}
           onClose={() => { setEditingTask(null); setIsCreating(false); }}

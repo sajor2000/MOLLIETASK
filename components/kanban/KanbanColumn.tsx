@@ -9,10 +9,12 @@ import {
 import { TaskCard } from "./TaskCard";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { TaskStatus, STATUS_CONFIG } from "@/lib/constants";
+import { staffInitials } from "@/lib/staffUtils";
 
 interface KanbanColumnProps {
   status: TaskStatus;
   tasks: Doc<"tasks">[];
+  staffById: Map<string, Doc<"staffMembers">>;
   onEditTask: (task: Doc<"tasks">) => void;
   onCompleteTask: (taskId: Id<"tasks">) => void;
   onClearCompleted?: () => void;
@@ -21,6 +23,7 @@ interface KanbanColumnProps {
 export const KanbanColumn = memo(function KanbanColumn({
   status,
   tasks,
+  staffById,
   onEditTask,
   onCompleteTask,
   onClearCompleted,
@@ -86,14 +89,20 @@ export const KanbanColumn = memo(function KanbanColumn({
         className="flex-1 px-3 pb-4 space-y-3 overflow-y-auto"
       >
         <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
-          {tasks.map((task) => (
-            <TaskCard
-              key={task._id}
-              task={task}
-              onEdit={onEditTask}
-              onComplete={onCompleteTask}
-            />
-          ))}
+          {tasks.map((task) => {
+            const staff = task.assignedStaffId
+              ? staffById.get(task.assignedStaffId)
+              : undefined;
+            return (
+              <TaskCard
+                key={task._id}
+                task={task}
+                assigneeInitials={staff ? staffInitials(staff.name) : undefined}
+                onEdit={onEditTask}
+                onComplete={onCompleteTask}
+              />
+            );
+          })}
         </SortableContext>
 
         {tasks.length === 0 && (

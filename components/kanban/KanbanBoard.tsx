@@ -18,6 +18,7 @@ import { KanbanColumn } from "./KanbanColumn";
 import { TaskCard } from "./TaskCard";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { COLUMN_ORDER, TaskStatus } from "@/lib/constants";
+import { staffInitials } from "@/lib/staffUtils";
 
 const SORT_ORDER_GAP = 1000;
 const SORT_ORDER_BEFORE_FIRST_OFFSET = 500;
@@ -26,6 +27,7 @@ const noop = () => {};
 
 interface KanbanBoardProps {
   tasks: Doc<"tasks">[];
+  staffById: Map<string, Doc<"staffMembers">>;
   onMoveTask: (taskId: Id<"tasks">, newStatus: TaskStatus, newSortOrder: number) => void;
   onEditTask: (task: Doc<"tasks">) => void;
   onCompleteTask: (taskId: Id<"tasks">) => void;
@@ -34,6 +36,7 @@ interface KanbanBoardProps {
 
 export const KanbanBoard = memo(function KanbanBoard({
   tasks,
+  staffById,
   onMoveTask,
   onEditTask,
   onCompleteTask,
@@ -137,6 +140,7 @@ export const KanbanBoard = memo(function KanbanBoard({
             key={status}
             status={status}
             tasks={tasksByStatus[status]}
+            staffById={staffById}
             onEditTask={onEditTask}
             onCompleteTask={onCompleteTask}
             onClearCompleted={status === "done" ? onClearCompleted : undefined}
@@ -149,6 +153,13 @@ export const KanbanBoard = memo(function KanbanBoard({
           <div className="rotate-[2deg] scale-[1.02]">
             <TaskCard
               task={activeTask}
+              assigneeInitials={
+                activeTask.assignedStaffId
+                  ? staffInitials(
+                      staffById.get(activeTask.assignedStaffId)?.name ?? "?",
+                    )
+                  : undefined
+              }
               onEdit={noop}
               onComplete={noop}
             />
