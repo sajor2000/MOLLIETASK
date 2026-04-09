@@ -16,10 +16,10 @@ Each folder contains:
 - `screen.png` — raster mock
 - `DESIGN.md` — shared design system doc (“The Silent Editor” / Digital Sanctuary); identical copy in all three folders
 
-## Product docs (repo root)
+## Product docs
 
-- `dental-task-os-PRD.md`
-- `dental-task-os-spec (2).docx`
+- [`docs/dental-task-os-PRD.md`](../docs/dental-task-os-PRD.md) — PRD (versioned in git)
+- `dental-task-os-spec (2).docx` — full technical spec (kept locally at repo root if present; not committed by default)
 
 ## One-file bundle
 

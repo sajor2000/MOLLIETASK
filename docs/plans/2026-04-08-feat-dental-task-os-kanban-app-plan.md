@@ -15,7 +15,7 @@ Build a single-user, web-first Kanban task management PWA for a dental practice 
 2. Brainstorm: `docs/brainstorms/2026-04-08-dental-task-os-brainstorm.md`
 3. Style guide (inline in brainstorm)
 4. Stitch designs (layout/component patterns only)
-5. PRD `dental-task-os-PRD.md` (feature logic reference — visual/auth/scope decisions overridden by brainstorm)
+5. PRD `docs/dental-task-os-PRD.md` (feature logic reference — visual/auth/scope decisions overridden by brainstorm)
 
 ---
 
@@ -760,7 +760,7 @@ const ParsedTaskSchema = z.object({
 
 ### Internal
 - Brainstorm: `docs/brainstorms/2026-04-08-dental-task-os-brainstorm.md`
-- PRD: `dental-task-os-PRD.md`
+- PRD: `docs/dental-task-os-PRD.md`
 - Stitch designs: `stitch (1)/`, `stitch (1) 2/`, `stitch (2)/`
 
 ### External

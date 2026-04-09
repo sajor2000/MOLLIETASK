@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "on-background": "#e1e6ea",
+            "tertiary-dim": "#c0dbee",
+            "secondary": "#82a4a9",
+            "surface-container-highest": "#212729",
+            "on-secondary-fixed-variant": "#406165",
+            "surface-container-lowest": "#000000",
+            "on-tertiary-fixed": "#2b4454",
+            "tertiary": "#eaf5ff",
+            "on-primary-fixed-variant": "#33626b",
+            "surface-container-high": "#1b2023",
+            "error-dim": "#bb5551",
+            "on-tertiary-container": "#3d5767",
+            "on-tertiary": "#465f6f",
+            "surface-container": "#161a1c",
+            "on-secondary": "#002429",
+            "outline": "#70767a",
+            "inverse-primary": "#37666f",
+            "on-secondary-container": "#a3c5ca",
+            "tertiary-fixed-dim": "#c0dbee",
+            "secondary-dim": "#82a4a9",
+            "on-surface-variant": "#a6acaf",
+            "secondary-container": "#1f4045",
+            "error": "#ee7d77",
+            "surface-container-low": "#111415",
+            "inverse-surface": "#f9f9fa",
+            "on-primary-fixed": "#11464e",
+            "error-container": "#7f2927",
+            "surface-dim": "#0c0e0f",
+            "surface-bright": "#262d30",
+            "on-surface": "#e1e6ea",
+            "on-secondary-fixed": "#244449",
+            "primary-fixed-dim": "#acdce7",
+            "primary-dim": "#91c1cb",
+            "secondary-fixed": "#c6e9ee",
+            "primary-container": "#1b4d56",
+            "tertiary-fixed": "#cee9fd",
+            "primary": "#9fced9",
+            "outline-variant": "#43494c",
+            "tertiary-container": "#cee9fd",
+            "on-primary": "#12464f",
+            "surface-tint": "#9fced9",
+            "on-error-container": "#ff9993",
+            "background": "#0c0e0f",
+            "surface-variant": "#212729",
+            "on-primary-container": "#a8d8e3",
+            "secondary-fixed-dim": "#b8dbe0",
+            "primary-fixed": "#baebf5",
+            "surface": "#0c0e0f",
+            "inverse-on-surface": "#545556",
+            "on-tertiary-fixed-variant": "#476071",
+            "on-error": "#490106"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.125rem",
+            "lg": "0.25rem",
+            "xl": "0.5rem",
+            "full": "0.75rem"
+          },
+          "fontFamily": {
+            "headline": ["Inter"],
+            "body": ["Inter"],
+            "label": ["Inter"]
+          }
+        },
+      }
+    }
+  </script>
+<style>
+    body { font-family: 'Inter', sans-serif; }
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    .custom-scrollbar::-webkit-scrollbar { width: 0px; height: 0px; }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface-dim text-on-surface min-h-screen selection:bg-primary/30">
+<!-- Top AppBar (from JSON) -->
+<header class="bg-[#0c0e0f] text-[#9fced9] font-inter text-sm font-medium tracking-tight flex justify-between items-center w-full px-6 h-16 fixed top-0 z-40">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined cursor-pointer hover:bg-[#212729] transition-colors duration-200 p-2 rounded-sm" data-icon="menu">menu</span>
+<span class="text-lg font-medium tracking-tighter text-[#9fced9]">The Silent Editor</span>
+</div>
+<div class="w-8 h-8 rounded-full overflow-hidden">
+<img alt="Profile" class="w-full h-full object-cover" data-alt="close-up minimalist portrait of a person with soft lighting and professional dark aesthetic" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDmXAD1QZWcUJW5g0zaEni50sGzFqUPcSrTkWN9PHqwOvFQWbn2LRcnrELMpTAwdpleK1Y2LosSUVawNfbzNPX3XQ5kpxoDry0S0a04Msp1xoZzQtaC4Sx2DHr6oZTCU4RUJQXWeeQHKH-H5wKiRSeJ_8ynv0afXdk67C9LSfr87rfiKxD8BZ-ZM1g26QdSyWKUNxSfW99aqLQmeFcdyKMedkJ77GMRriJTrudEJDv_J4qOi3IgslCxylUpgy5f_ds7G1SeOAfLolM"/>
+</div>
+</header>
+<!-- Main Content: Kanban Background -->
+<main class="pt-20 pb-24 px-6 max-w-md mx-auto">
+<div class="flex flex-col gap-6 opacity-40 select-none pointer-events-none">
+<div class="space-y-4">
+<h2 class="text-[#82a4a9] font-medium text-xs tracking-widest uppercase">In Progress</h2>
+<div class="bg-surface-container p-4 rounded-lg space-y-3">
+<div class="h-4 w-3/4 bg-surface-container-highest rounded-sm"></div>
+<div class="h-2 w-full bg-surface-container-highest rounded-sm opacity-50"></div>
+<div class="flex gap-2">
+<div class="h-4 w-12 bg-secondary-container/30 rounded-sm"></div>
+</div>
+</div>
+<div class="bg-surface-container-highest p-4 rounded-lg space-y-3 ring-1 ring-primary/20">
+<div class="h-4 w-5/6 bg-primary/20 rounded-sm"></div>
+<div class="h-2 w-full bg-primary/10 rounded-sm"></div>
+<div class="flex justify-between items-center">
+<div class="flex -space-x-2">
+<div class="w-6 h-6 rounded-full border border-surface-dim bg-surface-container-highest"></div>
+<div class="w-6 h-6 rounded-full border border-surface-dim bg-surface-container"></div>
+</div>
+</div>
+</div>
+</div>
+<div class="space-y-4">
+<h2 class="text-[#82a4a9] font-medium text-xs tracking-widest uppercase">Done</h2>
+<div class="bg-surface-container p-4 rounded-lg space-y-3">
+<div class="h-4 w-2/3 bg-surface-container-highest rounded-sm"></div>
+<div class="flex gap-2">
+<span class="material-symbols-outlined text-[14px]" data-icon="task_alt">task_alt</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Backdrop Overlay -->
+<div class="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"></div>
+<!-- Task Detail Drawer (Bottom Sheet) -->
+<div class="fixed bottom-0 left-0 right-0 z-50 transform translate-y-0 transition-transform duration-300 ease-out">
+<div class="bg-[#1e2428] rounded-t-xl border-t border-x border-[#252b2e] max-w-md mx-auto h-[707px] flex flex-col">
+<!-- Handle -->
+<div class="flex justify-center py-3">
+<div class="w-10 h-1 bg-surface-container-highest rounded-full"></div>
+</div>
+<!-- Content Container -->
+<div class="flex-1 overflow-y-auto px-6 pb-8 custom-scrollbar">
+<!-- Header -->
+<div class="flex justify-between items-start mb-6">
+<div class="space-y-2">
+<span class="inline-flex items-center px-3 py-1 rounded-full bg-[#76A5AF]/10 text-[#9fced9] text-[0.6875rem] font-medium tracking-wide">
+              In Progress
+            </span>
+<h1 class="text-[0.9375rem] font-medium text-on-surface leading-snug">
+              Refactor architectural components
+            </h1>
+<p class="text-[0.8125rem] font-normal text-[#8fa3a8]">
+              Nov 12
+            </p>
+</div>
+<button class="text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<!-- Description -->
+<div class="mb-8">
+<h3 class="text-[0.6875rem] font-medium text-secondary uppercase tracking-widest mb-3">Description</h3>
+<p class="text-[0.875rem] text-on-surface-variant leading-relaxed">
+            Ensure the shell layout respects the 64px offset on high-density displays. Use tonal layering for separation.
+          </p>
+</div>
+<!-- Attachments -->
+<div class="mb-8 flex items-center gap-2 group cursor-pointer">
+<span class="material-symbols-outlined text-[18px] text-secondary" data-icon="attach_file">attach_file</span>
+<span class="text-[0.8125rem] text-on-surface-variant group-hover:text-primary transition-colors">2 attachments</span>
+</div>
+<!-- Subtasks -->
+<div class="mb-10">
+<h3 class="text-[0.6875rem] font-medium text-secondary uppercase tracking-widest mb-4">Subtasks (1/3)</h3>
+<div class="space-y-3">
+<!-- Checked -->
+<label class="flex items-center gap-3 cursor-pointer group">
+<div class="w-5 h-5 rounded-[4px] bg-[#76A5AF] flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined text-[16px]" data-icon="check">check</span>
+</div>
+<span class="text-[0.875rem] text-on-surface-variant line-through opacity-60">Audit current shell layout</span>
+</label>
+<!-- Unchecked -->
+<label class="flex items-center gap-3 cursor-pointer group">
+<div class="w-5 h-5 rounded-[4px] border border-outline-variant group-hover:border-primary transition-colors"></div>
+<span class="text-[0.875rem] text-on-surface">Implement high-density pixel offset logic</span>
+</label>
+<!-- Unchecked -->
+<label class="flex items-center gap-3 cursor-pointer group">
+<div class="w-5 h-5 rounded-[4px] border border-outline-variant group-hover:border-primary transition-colors"></div>
+<span class="text-[0.875rem] text-on-surface">Update tonal recession background tokens</span>
+</label>
+</div>
+</div>
+<!-- Actions -->
+<div class="grid grid-cols-2 gap-3 mt-auto">
+<button class="bg-[#b05050]/10 text-[#ee7d77] py-3 rounded-lg text-[0.875rem] font-medium hover:bg-[#b05050]/20 transition-colors">
+            Delete
+          </button>
+<button class="bg-[#9fced9] text-[#12464f] py-3 rounded-lg text-[0.875rem] font-medium hover:brightness-110 transition-all">
+            Save
+          </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Navigation Bar (from JSON) -->
+<nav class="bg-[#161a1c]/80 backdrop-blur-md fixed bottom-0 left-0 w-full flex justify-around items-center py-3 px-8 z-[60]">
+<!-- Kanban (Active based on context) -->
+<a class="flex flex-col items-center justify-center bg-[#212729] text-[#9fced9] rounded-sm px-4 py-1 scale-95 duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="view_kanban">view_kanban</span>
+<span class="font-inter text-[0.6875rem] font-medium tracking-wide uppercase mt-1">Kanban</span>
+</a>
+<!-- Calendar -->
+<a class="flex flex-col items-center justify-center text-[#82a4a9] px-4 py-1 hover:text-[#9fced9] transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>
+<span class="font-inter text-[0.6875rem] font-medium tracking-wide uppercase mt-1">Calendar</span>
+</a>
+<!-- Today -->
+<a class="flex flex-col items-center justify-center text-[#82a4a9] px-4 py-1 hover:text-[#9fced9] transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="wb_sunny">wb_sunny</span>
+<span class="font-inter text-[0.6875rem] font-medium tracking-wide uppercase mt-1">Today</span>
+</a>
+</nav>
+</body></html>

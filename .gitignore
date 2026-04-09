@@ -13,7 +13,6 @@ build/
 # misc
 .DS_Store
 *.pem
-Untitled
 
 # debug
 npm-debug.log*
@@ -41,8 +40,7 @@ skills-lock.json
 AGENTS.md
 todos/
 
-# design assets & screenshots
-stitch*/
-*.zip
-*.docx
-*.png
+# Root-level clutter (canonical design lives in design/stitch-exports; docs images under docs/images/)
+/*.png
+/*.zip
+/*.docx

@@ -184,5 +184,5 @@ _None — user directed to follow Stitch designs and build simple Kanban task ma
 
 ## Source Materials
 
-- **PRD:** `dental-task-os-PRD.md` — feature logic, data model, tech constraints
+- **PRD:** `docs/dental-task-os-PRD.md` — feature logic, data model, tech constraints
 - **Stitch designs:** `stitch (1)/`, `stitch (1) 2/`, `stitch (2)/` — visual direction, component patterns, design system
