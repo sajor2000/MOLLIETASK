@@ -21,7 +21,7 @@ const MONTHS = [
 ];
 
 export default function CalendarPage() {
-  const tasks = useQuery(api.tasks.getTasksByStatus);
+  const tasks = useQuery(api.tasks.getTasksByStatus, {});
   const staffList = useQuery(api.staff.listStaff);
   const {
     editingTask,

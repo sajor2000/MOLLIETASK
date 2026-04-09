@@ -15,7 +15,7 @@ import { toCSTDateString, fromDateInputValue } from "@/lib/dates";
 import { useTaskActions } from "@/hooks/useTaskActions";
 
 export default function TodayPage() {
-  const tasks = useQuery(api.tasks.getTasksByStatus);
+  const tasks = useQuery(api.tasks.getTasksByStatus, {});
   const staffList = useQuery(api.staff.listStaff);
   const {
     editingTask,

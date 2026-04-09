@@ -15,7 +15,7 @@ import type { TaskFormData } from "@/lib/constants";
 import { useTaskActions } from "@/hooks/useTaskActions";
 
 export default function KanbanPage() {
-  const tasks = useQuery(api.tasks.getTasksByStatus);
+  const tasks = useQuery(api.tasks.getTasksByStatus, {});
   const staffList = useQuery(api.staff.listStaff);
   const {
     editingTask,

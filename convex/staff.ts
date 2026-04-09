@@ -62,10 +62,14 @@ export const addStaff = mutation({
       args.bio === undefined ? undefined : args.bio.trim() || undefined;
     if (bio && bio.length > BIO_MAX) throw new Error(`Bio max ${BIO_MAX} characters`);
 
+    const MAX_STAFF = 100;
     const rows = await ctx.db
       .query("staffMembers")
       .withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", ownerUserId))
-      .take(100);
+      .take(MAX_STAFF + 1);
+    if (rows.length >= MAX_STAFF) {
+      throw new Error(`Maximum ${MAX_STAFF} team members`);
+    }
     const maxSort = rows.reduce((m, r) => Math.max(m, r.sortOrder), 0);
     const sortOrder = maxSort > 0 ? maxSort + 1000 : 1000;
 
@@ -142,22 +146,28 @@ export const deleteStaff = mutation({
     }
 
     if (assigned.length > BATCH) {
+      // Defer staff row deletion until all assignments are cleared
       await ctx.scheduler.runAfter(0, internal.staff.clearStaffFromTasks, {
         ownerUserId,
         staffId,
+        deleteWhenDone: true,
       });
+    } else {
+      await ctx.db.delete(staffId);
     }
-
-    await ctx.db.delete(staffId);
     return null;
   },
 });
 
 /** Continuation: clear assignedStaffId from remaining tasks after staff deletion. */
 export const clearStaffFromTasks = internalMutation({
-  args: { ownerUserId: v.id("users"), staffId: v.id("staffMembers") },
+  args: {
+    ownerUserId: v.id("users"),
+    staffId: v.id("staffMembers"),
+    deleteWhenDone: v.optional(v.boolean()),
+  },
   returns: v.null(),
-  handler: async (ctx, { ownerUserId, staffId }) => {
+  handler: async (ctx, { ownerUserId, staffId, deleteWhenDone }) => {
     const BATCH = 100;
     const assigned = await ctx.db
       .query("tasks")
@@ -174,7 +184,14 @@ export const clearStaffFromTasks = internalMutation({
       await ctx.scheduler.runAfter(0, internal.staff.clearStaffFromTasks, {
         ownerUserId,
         staffId,
+        deleteWhenDone,
       });
+    } else if (deleteWhenDone) {
+      // All assignments cleared — safe to delete the staff row
+      const staffRow = await ctx.db.get(staffId);
+      if (staffRow) {
+        await ctx.db.delete(staffId);
+      }
     }
     return null;
   },
