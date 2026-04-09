@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { AppShell } from "@/components/layout/AppShell";
@@ -23,10 +23,17 @@ export default function KanbanPage() {
   const [editingTask, setEditingTask] = useState<Doc<"tasks"> | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [prefillData, setPrefillData] = useState<Partial<TaskFormData> | undefined>(undefined);
+  const [searchQuery, setSearchQuery] = useState("");
   const [undoAction, setUndoAction] = useState<{
     taskId: Id<"tasks">;
     previousStatus: TaskStatus;
   } | null>(null);
+
+  const filteredTasks = useMemo(() => {
+    if (!tasks || !searchQuery.trim()) return tasks;
+    const q = searchQuery.toLowerCase();
+    return tasks.filter((t) => t.title.toLowerCase().includes(q));
+  }, [tasks, searchQuery]);
 
   // Use ref to avoid tasks in useCallback dep array (prevents KanbanBoard re-renders)
   const tasksRef = useRef(tasks);
@@ -126,6 +133,8 @@ export default function KanbanPage() {
   return (
     <AppShell
       onAddTask={() => setIsCreating(true)}
+      searchQuery={searchQuery}
+      onSearchChange={setSearchQuery}
       topBarExtra={
         <AiCaptureBar
           tasks={tasks}
@@ -137,7 +146,7 @@ export default function KanbanPage() {
     >
       <div className="h-[calc(100dvh-64px-56px)] md:h-[calc(100dvh-64px)]">
         <KanbanBoard
-          tasks={tasks}
+          tasks={filteredTasks ?? []}
           onMoveTask={handleMoveTask}
           onEditTask={setEditingTask}
           onCompleteTask={handleCompleteTask}

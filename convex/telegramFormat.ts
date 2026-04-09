@@ -88,6 +88,10 @@ export const HELP_TEXT = `Available commands:
 /done 3 \u2014 Complete task #3 from list
 /done Buy supplies \u2014 Complete task by name
 /edit 3 change priority to high \u2014 Edit task #3
+/timezone \u2014 Show current timezone
+/timezone Central \u2014 Set timezone
+/digest 08:00 \u2014 Set daily digest time
+/digest off \u2014 Disable daily digest
 /help \u2014 Show this help
 
 You can also type naturally:

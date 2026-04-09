@@ -455,7 +455,7 @@ The goal: open the app, see a Kanban board, create tasks, drag them around.
 
 #### 2.1 AI Task Capture
 
-- [ ] Install `ai` package (Vercel AI SDK), `@ai-sdk/openai`, `zod`
+- [ ] Install `ai` package (Vercel AI SDK), `@openrouter/ai-sdk-provider`, `zod`
 - [ ] Write `convex/ai.ts`: Convex action that calls Vercel AI SDK `generateText` with `Output.object()` and Zod schema
 - [ ] Zod schema for parsed task:
 
@@ -698,7 +698,7 @@ const ParsedTaskSchema = z.object({
   - `APP_PASSWORD_HASH`, `SESSION_SECRET`
   - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`
   - `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`
-  - `OPENAI_API_KEY`
+  - `OPENROUTER_API_KEY`
 - [ ] Deploy Convex production: `npx convex deploy`
 - [ ] Set Telegram webhook URL to production domain
 - [ ] Run seed script to create user record in production Convex

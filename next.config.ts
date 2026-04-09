@@ -5,6 +5,7 @@ const cspHeader = `
   script-src 'self' 'unsafe-inline';
   style-src 'self' 'unsafe-inline';
   font-src 'self';
+  worker-src 'self';
   connect-src 'self' https://*.convex.cloud wss://*.convex.cloud;
   img-src 'self' blob: data:;
   object-src 'none';
@@ -17,6 +18,13 @@ const cspHeader = `
 const nextConfig: NextConfig = {
   async headers() {
     return [
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+        ],
+      },
       {
         source: "/(.*)",
         headers: [
