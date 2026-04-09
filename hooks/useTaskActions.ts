@@ -1,20 +1,38 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useConvex, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
-import type { TaskFormData } from "@/lib/constants";
+import type { TaskFormData, TaskStatus } from "@/lib/constants";
 
-export function useTaskActions() {
+export function useTaskActions(tasks?: Doc<"tasks">[]) {
   const convex = useConvex();
   const addTask = useMutation(api.tasks.addTask);
   const updateTask = useMutation(api.tasks.updateTask);
   const deleteTask = useMutation(api.tasks.deleteTask);
   const completeTask = useMutation(api.tasks.completeTask);
+  const uncompleteTask = useMutation(api.tasks.uncompleteTask);
+  const reorderTask = useMutation(api.tasks.reorderTask);
+  const deleteCompletedTasks = useMutation(api.tasks.deleteCompletedTasks);
 
+  // Stable ref for tasks to avoid re-renders in callbacks
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
+
+  // Modal/form state
   const [editingTask, setEditingTask] = useState<Doc<"tasks"> | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+
+  // Undo state
+  const [undoAction, setUndoAction] = useState<{
+    taskId: Id<"tasks">;
+    previousStatus: TaskStatus;
+    spawnedTaskId?: Id<"tasks">;
+  } | null>(null);
+
+  // Error feedback state
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleSave = useCallback(
     async (data: TaskFormData) => {
@@ -23,7 +41,7 @@ export function useTaskActions() {
           await updateTask({ taskId: editingTask._id, ...data });
           setEditingTask(null);
         } catch {
-          console.error("Failed to update task");
+          setErrorMessage("Failed to update task");
         }
       } else {
         try {
@@ -36,7 +54,7 @@ export function useTaskActions() {
             setIsCreating(false);
           }
         } catch {
-          console.error("Failed to add task");
+          setErrorMessage("Failed to add task");
           setIsCreating(false);
         }
       }
@@ -46,18 +64,63 @@ export function useTaskActions() {
 
   const handleDelete = useCallback(
     (taskId: Id<"tasks">) => {
-      deleteTask({ taskId }).catch(console.error);
+      deleteTask({ taskId }).catch(() => setErrorMessage("Failed to delete task"));
       setEditingTask(null);
     },
     [deleteTask],
   );
 
   const handleComplete = useCallback(
-    (taskId: Id<"tasks">) => {
-      completeTask({ taskId }).catch(console.error);
+    async (taskId: Id<"tasks">) => {
+      const task = tasksRef.current?.find((t) => t._id === taskId);
+      if (!task || task.status === "done") return;
+
+      try {
+        const nextTaskId = await completeTask({ taskId });
+        setUndoAction({
+          taskId,
+          previousStatus: task.status,
+          spawnedTaskId: nextTaskId ?? undefined,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Failed to complete task";
+        setErrorMessage(msg);
+      }
     },
     [completeTask],
   );
+
+  const handleUndo = useCallback(() => {
+    if (!undoAction) return;
+    uncompleteTask({
+      taskId: undoAction.taskId,
+      previousStatus: undoAction.previousStatus,
+      spawnedTaskId: undoAction.spawnedTaskId,
+    }).catch(() => setErrorMessage("Failed to undo completion"));
+    setUndoAction(null);
+  }, [undoAction, uncompleteTask]);
+
+  const handleReorder = useCallback(
+    (taskId: Id<"tasks">, newStatus: TaskStatus, newSortOrder: number) => {
+      reorderTask({ taskId, newStatus, newSortOrder }).catch((err) => {
+        const msg = err instanceof Error ? err.message : "Failed to move task";
+        setErrorMessage(msg);
+      });
+    },
+    [reorderTask],
+  );
+
+  const handleClearCompleted = useCallback(async () => {
+    try {
+      let hasMore = true;
+      while (hasMore) {
+        const result = await deleteCompletedTasks();
+        hasMore = result.hasMore;
+      }
+    } catch {
+      setErrorMessage("Failed to clear completed tasks");
+    }
+  }, [deleteCompletedTasks]);
 
   return {
     editingTask,
@@ -67,5 +130,12 @@ export function useTaskActions() {
     handleSave,
     handleDelete,
     handleComplete,
+    handleUndo,
+    handleReorder,
+    handleClearCompleted,
+    undoAction,
+    clearUndo: useCallback(() => setUndoAction(null), []),
+    errorMessage,
+    clearError: useCallback(() => setErrorMessage(null), []),
   };
 }

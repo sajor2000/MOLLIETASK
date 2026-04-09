@@ -84,7 +84,7 @@ export const getTask = query({
 export async function completeTaskCore(
   ctx: MutationCtx,
   task: Doc<"tasks">,
-  extraPatch?: Record<string, unknown>,
+  extraPatch?: { sortOrder?: number },
 ): Promise<{ nextTaskId: Id<"tasks"> | null; wasRecurring: boolean }> {
   const subtasks = await ctx.db
     .query("subtasks")
@@ -327,9 +327,10 @@ export const uncompleteTask = mutation({
   args: {
     taskId: v.id("tasks"),
     previousStatus: v.optional(statusValidator),
+    spawnedTaskId: v.optional(v.id("tasks")),
   },
   returns: v.null(),
-  handler: async (ctx, { taskId, previousStatus }) => {
+  handler: async (ctx, { taskId, previousStatus, spawnedTaskId }) => {
     const userId = await getAuthUserId(ctx);
 
     const task = await ctx.db.get(taskId);
@@ -341,6 +342,23 @@ export const uncompleteTask = mutation({
       status: previousStatus ?? "todo",
       completedAt: undefined,
     });
+
+    // Clean up spawned recurring copy on undo
+    if (spawnedTaskId) {
+      const spawned = await ctx.db.get(spawnedTaskId);
+      if (spawned && spawned.userId === userId) {
+        const subtasks = await ctx.db
+          .query("subtasks")
+          .withIndex("by_parentTaskId_and_sortOrder", (q) =>
+            q.eq("parentTaskId", spawnedTaskId),
+          )
+          .take(50);
+        for (const s of subtasks) {
+          await ctx.db.delete(s._id);
+        }
+        await ctx.db.delete(spawnedTaskId);
+      }
+    }
 
     return null;
   },

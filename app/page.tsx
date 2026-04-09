@@ -1,34 +1,39 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
-import { useQuery, useMutation, useConvex } from "convex/react";
+import { useMemo, useState } from "react";
+import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { AppShell } from "@/components/layout/AppShell";
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
 import { TaskDetailView } from "@/components/task/TaskDetailView";
 import { AiCaptureBar } from "@/components/task/AiCaptureBar";
 import { UndoToast } from "@/components/ui/UndoToast";
-import type { Doc, Id } from "@/convex/_generated/dataModel";
-import type { TaskStatus, TaskFormData } from "@/lib/constants";
+import { ErrorToast } from "@/components/ui/ErrorToast";
+import type { Doc } from "@/convex/_generated/dataModel";
+import type { TaskFormData } from "@/lib/constants";
+import { useTaskActions } from "@/hooks/useTaskActions";
 
 export default function KanbanPage() {
-  const convex = useConvex();
   const tasks = useQuery(api.tasks.getTasksByStatus);
-  const addTask = useMutation(api.tasks.addTask);
-  const updateTask = useMutation(api.tasks.updateTask);
-  const deleteTask = useMutation(api.tasks.deleteTask);
-  const completeTask = useMutation(api.tasks.completeTask);
-  const uncompleteTask = useMutation(api.tasks.uncompleteTask);
-  const reorderTask = useMutation(api.tasks.reorderTask);
+  const {
+    editingTask,
+    setEditingTask,
+    isCreating,
+    setIsCreating,
+    handleSave,
+    handleDelete,
+    handleComplete,
+    handleReorder,
+    handleUndo,
+    undoAction,
+    clearUndo,
+    errorMessage,
+    clearError,
+  } = useTaskActions(tasks);
 
-  const [editingTask, setEditingTask] = useState<Doc<"tasks"> | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
+  // Kanban-specific state
   const [prefillData, setPrefillData] = useState<Partial<TaskFormData> | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState("");
-  const [undoAction, setUndoAction] = useState<{
-    taskId: Id<"tasks">;
-    previousStatus: TaskStatus;
-  } | null>(null);
 
   const filteredTasks = useMemo(() => {
     if (!tasks || !searchQuery.trim()) return tasks;
@@ -36,101 +41,21 @@ export default function KanbanPage() {
     return tasks.filter((t) => t.title.toLowerCase().includes(q));
   }, [tasks, searchQuery]);
 
-  // Use ref to avoid tasks in useCallback dep array (prevents KanbanBoard re-renders)
-  const tasksRef = useRef(tasks);
-  tasksRef.current = tasks;
-
-  const handleMoveTask = useCallback(
-    (taskId: Id<"tasks">, newStatus: TaskStatus, newSortOrder: number) => {
-      reorderTask({ taskId, newStatus, newSortOrder }).catch(() => {
-        // Convex optimistic update will snap back; error logged for debugging
-        console.error("Failed to reorder task");
-      });
-    },
-    [reorderTask],
-  );
-
-  const handleCompleteTask = useCallback(
-    (taskId: Id<"tasks">) => {
-      const task = tasksRef.current?.find((t: Doc<"tasks">) => t._id === taskId);
-      if (!task || task.status === "done") return;
-
-      setUndoAction({ taskId, previousStatus: task.status });
-      completeTask({ taskId }).catch(() => {
-        setUndoAction(null);
-        console.error("Failed to complete task");
-      });
-    },
-    [completeTask],
-  );
-
-  const handleUndo = useCallback(() => {
-    if (!undoAction) return;
-    uncompleteTask({
-      taskId: undoAction.taskId,
-      previousStatus: undoAction.previousStatus,
-    }).catch(() => {
-      console.error("Failed to undo completion");
-    });
-    setUndoAction(null);
-  }, [undoAction, uncompleteTask]);
-
-  const handleSaveTask = useCallback(
-    async (taskData: TaskFormData) => {
-      if (editingTask) {
-        try {
-          await updateTask({ taskId: editingTask._id, ...taskData });
-          setEditingTask(null);
-        } catch {
-          console.error("Failed to update task");
-        }
-      } else {
-        try {
-          const taskId = await addTask(taskData);
-          const doc = await convex.query(api.tasks.getTask, { taskId });
-          if (doc) {
-            setEditingTask(doc);
-            setIsCreating(false);
-          } else {
-            setIsCreating(false);
-          }
-        } catch {
-          console.error("Failed to add task");
-          setIsCreating(false);
-        }
-      }
-    },
-    [editingTask, updateTask, addTask, convex],
-  );
-
-  const handleDeleteTask = useCallback(
-    (taskId: Id<"tasks">) => {
-      deleteTask({ taskId }).catch(() => {
-        console.error("Failed to delete task");
-      });
-      setEditingTask(null);
-    },
-    [deleteTask],
-  );
-
-  const handleAiAddTask = useCallback((prefill: Partial<TaskFormData>) => {
+  const handleAiAddTask = (prefill: Partial<TaskFormData>) => {
     setPrefillData(prefill);
     setIsCreating(true);
-  }, []);
+  };
 
-  const handleAiEditTask = useCallback(
-    (task: Doc<"tasks">, changes: Partial<TaskFormData>) => {
-      setEditingTask(task);
-      setPrefillData(changes);
-    },
-    [],
-  );
+  const handleAiEditTask = (task: Doc<"tasks">, changes: Partial<TaskFormData>) => {
+    setEditingTask(task);
+    setPrefillData(changes);
+  };
 
-  const handleCloseModal = useCallback(() => {
+  const handleCloseModal = () => {
     setEditingTask(null);
     setIsCreating(false);
     setPrefillData(undefined);
-  }, []);
+  };
 
   if (tasks === undefined) {
     return (
@@ -152,16 +77,16 @@ export default function KanbanPage() {
           tasks={tasks}
           onAddTask={handleAiAddTask}
           onEditTask={handleAiEditTask}
-          onCompleteTask={handleCompleteTask}
+          onCompleteTask={handleComplete}
         />
       }
     >
       <div className="h-[calc(100dvh-64px-56px)] md:h-[calc(100dvh-64px)]">
         <KanbanBoard
           tasks={filteredTasks ?? []}
-          onMoveTask={handleMoveTask}
+          onMoveTask={handleReorder}
           onEditTask={setEditingTask}
-          onCompleteTask={handleCompleteTask}
+          onCompleteTask={handleComplete}
         />
       </div>
 
@@ -169,10 +94,10 @@ export default function KanbanPage() {
         <TaskDetailView
           task={editingTask}
           prefill={isCreating ? prefillData : undefined}
-          onSave={handleSaveTask}
+          onSave={handleSave}
           onDelete={
             editingTask
-              ? () => handleDeleteTask(editingTask._id)
+              ? () => handleDelete(editingTask._id)
               : undefined
           }
           onClose={handleCloseModal}
@@ -183,8 +108,12 @@ export default function KanbanPage() {
         <UndoToast
           message="Task completed"
           onUndo={handleUndo}
-          onExpire={() => setUndoAction(null)}
+          onExpire={clearUndo}
         />
+      )}
+
+      {errorMessage && !undoAction && (
+        <ErrorToast message={errorMessage} onDismiss={clearError} />
       )}
     </AppShell>
   );

@@ -6,6 +6,8 @@ import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { AppShell } from "@/components/layout/AppShell";
 import { TaskDetailView } from "@/components/task/TaskDetailView";
+import { UndoToast } from "@/components/ui/UndoToast";
+import { ErrorToast } from "@/components/ui/ErrorToast";
 import { Icon } from "@/components/ui/Icon";
 import { WORKSTREAM_CONFIG } from "@/lib/constants";
 import type { TaskFormData } from "@/lib/constants";
@@ -22,7 +24,12 @@ export default function TodayPage() {
     handleSave,
     handleDelete,
     handleComplete,
-  } = useTaskActions();
+    handleUndo,
+    undoAction,
+    clearUndo,
+    errorMessage,
+    clearError,
+  } = useTaskActions(tasks);
 
   const todayStr = toCSTDateString(Date.now());
 
@@ -133,6 +140,18 @@ export default function TodayPage() {
           onDelete={editingTask ? () => handleDelete(editingTask._id) : undefined}
           onClose={() => { setEditingTask(null); setIsCreating(false); }}
         />
+      )}
+
+      {undoAction && (
+        <UndoToast
+          message="Task completed"
+          onUndo={handleUndo}
+          onExpire={clearUndo}
+        />
+      )}
+
+      {errorMessage && !undoAction && (
+        <ErrorToast message={errorMessage} onDismiss={clearError} />
       )}
     </AppShell>
   );

@@ -6,6 +6,8 @@ import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { AppShell } from "@/components/layout/AppShell";
 import { TaskDetailView } from "@/components/task/TaskDetailView";
+import { UndoToast } from "@/components/ui/UndoToast";
+import { ErrorToast } from "@/components/ui/ErrorToast";
 import { Icon } from "@/components/ui/Icon";
 import { WORKSTREAM_CONFIG } from "@/lib/constants";
 import type { TaskFormData } from "@/lib/constants";
@@ -28,7 +30,12 @@ export default function CalendarPage() {
     handleSave,
     handleDelete,
     handleComplete,
-  } = useTaskActions();
+    handleUndo,
+    undoAction,
+    clearUndo,
+    errorMessage,
+    clearError,
+  } = useTaskActions(tasks);
 
   const [viewDate, setViewDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -267,6 +274,18 @@ export default function CalendarPage() {
           onDelete={editingTask ? () => handleDelete(editingTask._id) : undefined}
           onClose={() => { setEditingTask(null); setIsCreating(false); }}
         />
+      )}
+
+      {undoAction && (
+        <UndoToast
+          message="Task completed"
+          onUndo={handleUndo}
+          onExpire={clearUndo}
+        />
+      )}
+
+      {errorMessage && !undoAction && (
+        <ErrorToast message={errorMessage} onDismiss={clearError} />
       )}
     </AppShell>
   );
