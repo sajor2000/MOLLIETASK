@@ -53,6 +53,9 @@ export function useTaskActions(tasks?: Doc<"tasks">[]) {
   // Error feedback state
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Success feedback state
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
   const handleSave = useCallback(
     async (data: TaskFormData) => {
       if (editingTask) {
@@ -70,6 +73,7 @@ export function useTaskActions(tasks?: Doc<"tasks">[]) {
             assignedStaffId: data.assignedStaffId ?? null,
           });
           setEditingTask(null);
+          setSuccessMessage("Task saved");
         } catch {
           setErrorMessage("Failed to update task");
         }
@@ -170,5 +174,7 @@ export function useTaskActions(tasks?: Doc<"tasks">[]) {
     clearUndo: useCallback(() => setUndoAction(null), []),
     errorMessage,
     clearError: useCallback(() => setErrorMessage(null), []),
+    successMessage,
+    clearSuccess: useCallback(() => setSuccessMessage(null), []),
   };
 }
