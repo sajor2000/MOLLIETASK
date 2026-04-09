@@ -164,6 +164,24 @@ export const deleteAccount = mutation({
       return null;
     }
 
+    // Delete staff members
+    const staff = await ctx.db
+      .query("staffMembers")
+      .withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", userId))
+      .take(200);
+    for (const s of staff) {
+      await ctx.db.delete(s._id);
+    }
+
+    // Delete task templates
+    const templates = await ctx.db
+      .query("taskTemplates")
+      .withIndex("by_userId_category", (q) => q.eq("userId", userId))
+      .take(200);
+    for (const t of templates) {
+      await ctx.db.delete(t._id);
+    }
+
     // Delete push subscriptions
     const subs = await ctx.db
       .query("pushSubscriptions")
@@ -218,6 +236,24 @@ export const deleteAccountCleanup = internalMutation({
     if (tasks.length === 200) {
       await ctx.scheduler.runAfter(0, internal.users.deleteAccountCleanup, { userId });
       return null;
+    }
+
+    // Delete staff members
+    const staff = await ctx.db
+      .query("staffMembers")
+      .withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", userId))
+      .take(200);
+    for (const s of staff) {
+      await ctx.db.delete(s._id);
+    }
+
+    // Delete task templates
+    const templates = await ctx.db
+      .query("taskTemplates")
+      .withIndex("by_userId_category", (q) => q.eq("userId", userId))
+      .take(200);
+    for (const t of templates) {
+      await ctx.db.delete(t._id);
     }
 
     const subs = await ctx.db
