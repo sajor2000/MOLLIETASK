@@ -8,6 +8,7 @@ import { STATUS_CONFIG } from "@/lib/constants";
 import { toDateInputValue, fromDateInputValue } from "@/lib/dates";
 import { staffLabel } from "@/lib/staffUtils";
 import { WorkstreamPicker, PriorityPicker, RecurringPicker } from "@/components/ui/FormToggles";
+import { textInputBase } from "@/components/ui/inputStyles";
 import { TaskAttachments } from "./TaskAttachments";
 
 interface TaskFormProps {
@@ -21,6 +22,8 @@ interface TaskFormProps {
   onClose: () => void;
   children?: React.ReactNode;
 }
+
+const titleInputClass = `${textInputBase} w-full text-[15px] leading-[1.4] pt-3.5 pb-3 min-h-[48px] border-b border-border focus:border-accent`;
 
 export function TaskForm({
   task,
@@ -124,7 +127,7 @@ export function TaskForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-1 flex-col min-h-0">
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y px-6 pb-24 space-y-6 [-webkit-overflow-scrolling:touch]">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y px-6 pt-3 pb-24 space-y-6 [-webkit-overflow-scrolling:touch]">
         {/* Title */}
         <div>
           <input
@@ -134,7 +137,7 @@ export function TaskForm({
             placeholder="Task title..."
             maxLength={200}
             autoFocus
-            className="w-full bg-transparent text-[15px] text-text-primary placeholder:text-text-muted focus:outline-none py-2 border-b border-border focus:border-accent transition-colors duration-200"
+            className={titleInputClass}
           />
         </div>
 
@@ -199,7 +202,7 @@ export function TaskForm({
                   const match = staffMembers.find((s) => s._id === val);
                   setAssignedStaffId(match ? match._id : null);
                 }}
-                className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
+                className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 pt-2 pb-2.5 text-[13px] leading-relaxed text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
               >
                 <option value="">Me (default)</option>
                 {[...staffMembers]
@@ -229,7 +232,7 @@ export function TaskForm({
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
-              className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
+              className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 pt-2 pb-2.5 text-[13px] leading-relaxed text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
             />
           </div>
           <div>
@@ -241,7 +244,7 @@ export function TaskForm({
               value={dueTime}
               onChange={(e) => setDueTime(e.target.value)}
               disabled={!dueDate}
-              className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary disabled:opacity-60 focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
+              className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 pt-2 pb-2.5 text-[13px] leading-relaxed text-text-primary disabled:opacity-60 focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
             />
           </div>
         </div>
@@ -291,7 +294,7 @@ export function TaskForm({
             placeholder="Add notes..."
             maxLength={2000}
             rows={3}
-            className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 resize-none"
+            className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 pt-2 pb-2.5 text-[13px] leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 resize-none"
           />
         </div>
 

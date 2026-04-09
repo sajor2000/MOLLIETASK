@@ -21,6 +21,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { api } from "@/convex/_generated/api";
 import { Icon } from "@/components/ui/Icon";
+import { textInputBase } from "@/components/ui/inputStyles";
 import { SuggestStepsButton } from "./SuggestStepsButton";
 import type { Id, Doc } from "@/convex/_generated/dataModel";
 
@@ -247,7 +248,7 @@ export function SubtaskList({ parentTaskId }: SubtaskListProps) {
             onKeyDown={handleKeyDown}
             placeholder="Add subtask..."
             maxLength={200}
-            className="flex-1 bg-transparent text-[13px] text-text-primary placeholder:text-text-muted/50 focus:outline-none py-1"
+            className={`${textInputBase} flex-1 text-[13px] leading-relaxed pt-1 pb-1.5 placeholder:text-text-muted/50`}
           />
           {newTitle.trim() && (
             <button
