@@ -1,6 +1,6 @@
 const clientId = process.env.WORKOS_CLIENT_ID;
 
-export default {
+const authConfig = {
   providers: [
     {
       type: "customJwt" as const,
@@ -18,3 +18,5 @@ export default {
     },
   ],
 };
+
+export default authConfig;

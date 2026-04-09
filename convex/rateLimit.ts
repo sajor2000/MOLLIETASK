@@ -1,12 +1,13 @@
 import { v } from "convex/values";
-import { internalQuery, internalMutation } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
 
 const COOLDOWNS: Record<string, number> = {
   parseTaskIntent: 2000,
   suggestSubtasks: 10000,
 };
 
-export const checkRateLimit = internalQuery({
+/** Atomically check rate limit and record the hit in a single mutation. */
+export const checkAndRecord = internalMutation({
   args: {
     userId: v.id("users"),
     action: v.string(),
@@ -29,19 +30,9 @@ export const checkRateLimit = internalQuery({
         retryAfterMs: recent.timestamp + cooldown - Date.now(),
       };
     }
-    return { allowed: true, retryAfterMs: 0 };
-  },
-});
 
-export const recordRateLimitHit = internalMutation({
-  args: {
-    userId: v.id("users"),
-    action: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, { userId, action }) => {
     await ctx.db.insert("rateLimits", { userId, action, timestamp: Date.now() });
-    return null;
+    return { allowed: true, retryAfterMs: 0 };
   },
 });
 
@@ -50,7 +41,10 @@ export const cleanupOldEntries = internalMutation({
   returns: v.null(),
   handler: async (ctx) => {
     const cutoff = Date.now() - 60 * 60 * 1000;
-    const entries = await ctx.db.query("rateLimits").take(200);
+    const entries = await ctx.db
+      .query("rateLimits")
+      .withIndex("by_userId_action")
+      .take(200);
     for (const entry of entries) {
       if (entry.timestamp < cutoff) {
         await ctx.db.delete(entry._id);

@@ -11,7 +11,7 @@ const cspHeader = `
   style-src 'self' 'unsafe-inline';
   font-src 'self';
   worker-src 'self';
-  connect-src 'self' https://*.convex.cloud wss://*.convex.cloud;
+  connect-src 'self' https://*.convex.cloud wss://*.convex.cloud https://api.workos.com;
   img-src 'self' blob: data:;
   object-src 'none';
   base-uri 'self';

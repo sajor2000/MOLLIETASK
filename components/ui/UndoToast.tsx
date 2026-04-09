@@ -17,7 +17,9 @@ export function UndoToast({
   duration = 5000,
 }: UndoToastProps) {
   const onExpireRef = useRef(onExpire);
-  onExpireRef.current = onExpire;
+  useEffect(() => {
+    onExpireRef.current = onExpire;
+  });
 
   useEffect(() => {
     const timer = setTimeout(() => onExpireRef.current(), duration);

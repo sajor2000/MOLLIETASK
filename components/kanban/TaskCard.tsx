@@ -11,11 +11,17 @@ import { formatDueDate, isTaskOverdue } from "@/lib/dates";
 
 interface TaskCardProps {
   task: Doc<"tasks">;
+  assigneeInitials?: string;
   onEdit: (task: Doc<"tasks">) => void;
   onComplete: (taskId: Id<"tasks">) => void;
 }
 
-export const TaskCard = memo(function TaskCard({ task, onEdit, onComplete }: TaskCardProps) {
+export const TaskCard = memo(function TaskCard({
+  task,
+  assigneeInitials,
+  onEdit,
+  onComplete,
+}: TaskCardProps) {
   const {
     attributes,
     listeners,
@@ -91,6 +97,14 @@ export const TaskCard = memo(function TaskCard({ task, onEdit, onComplete }: Tas
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             <WorkstreamBadge workstream={task.workstream} />
             <PriorityDot priority={task.priority} />
+            {assigneeInitials && (
+              <span
+                className="text-[10px] font-medium text-accent bg-accent/15 px-1.5 py-0.5 rounded-[3px] shrink-0"
+                title="Assigned"
+              >
+                {assigneeInitials}
+              </span>
+            )}
             {dueLabel && (
               <span
                 className={`text-[11px] ${

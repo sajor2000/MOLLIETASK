@@ -8,6 +8,7 @@ import { TopBar } from "./TopBar";
 interface AppShellProps {
   children: ReactNode;
   onAddTask?: () => void;
+  onOpenTemplates?: () => void;
   topBarExtra?: ReactNode;
   searchQuery?: string;
   onSearchChange?: (value: string) => void;
@@ -16,6 +17,7 @@ interface AppShellProps {
 export function AppShell({
   children,
   onAddTask,
+  onOpenTemplates,
   topBarExtra,
   searchQuery,
   onSearchChange,
@@ -26,6 +28,7 @@ export function AppShell({
       <div className="md:ml-64 flex flex-col min-h-dvh">
         <TopBar
           onAddTask={onAddTask}
+          onOpenTemplates={onOpenTemplates}
           topBarExtra={topBarExtra}
           searchQuery={searchQuery}
           onSearchChange={onSearchChange}

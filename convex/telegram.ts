@@ -49,6 +49,25 @@ export const sendReminderMessage = internalAction({
   },
 });
 
+export const answerCallbackQuery = internalAction({
+  args: {
+    callbackQueryId: v.string(),
+  },
+  returns: v.null(),
+  handler: async (_, { callbackQueryId }) => {
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    if (!token) return null;
+
+    await fetch(`${TELEGRAM_API}${token}/answerCallbackQuery`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ callback_query_id: callbackQueryId }),
+    });
+
+    return null;
+  },
+});
+
 export const sendTextMessage = internalAction({
   args: {
     chatId: v.string(),

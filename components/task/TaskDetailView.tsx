@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { TaskForm } from "./TaskForm";
 import { SubtaskList } from "./SubtaskList";
 import { Icon } from "@/components/ui/Icon";
@@ -10,6 +10,7 @@ import type { TaskFormData } from "@/lib/constants";
 interface TaskDetailViewProps {
   task?: Doc<"tasks"> | null;
   prefill?: Partial<TaskFormData>;
+  staffMembers?: Doc<"staffMembers">[];
   onSave: (data: TaskFormData) => void | Promise<void>;
   onDelete?: () => void;
   onClose: () => void;
@@ -18,13 +19,21 @@ interface TaskDetailViewProps {
 export function TaskDetailView({
   task,
   prefill,
+  staffMembers,
   onSave,
   onDelete,
   onClose,
 }: TaskDetailViewProps) {
+  const [dialogEl, setDialogEl] = useState<HTMLDivElement | null>(null);
+  const dialogRef = useCallback((node: HTMLDivElement | null) => {
+    setDialogEl(node);
+  }, []);
+
   // Use ref to avoid re-attaching listener when onClose changes
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -53,6 +62,7 @@ export function TaskDetailView({
       {/* Responsive container: bottom sheet on mobile, centered modal on desktop */}
       <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-6">
         <div
+          ref={dialogRef}
           className="bg-surface-elevated border-t border-x md:border border-border rounded-t-[8px] md:rounded-[4px] w-full md:max-w-[480px] max-h-[85vh] md:max-h-[80vh] flex flex-col animate-[slideUp_200ms_ease-out] md:animate-[fadeIn_150ms_ease-out]"
           role="dialog"
           aria-modal="true"
@@ -80,6 +90,8 @@ export function TaskDetailView({
             key={task?._id ?? "new"}
             task={task}
             prefill={prefill}
+            staffMembers={staffMembers}
+            hotkeyRoot={dialogEl}
             onSave={onSave}
             onDelete={onDelete}
             onClose={onClose}

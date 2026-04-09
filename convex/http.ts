@@ -21,6 +21,23 @@ const TZ_SHORTCUTS: Record<string, string> = {
   hawaii: "Pacific/Honolulu",
 };
 
+// Regex for detecting date/time indicators that benefit from AI parsing
+const DATE_TIME_PATTERN = /\b(today|tomorrow|tonight|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next\s+\w+|in\s+\d+\s+\w+|\d{1,2}[:/]\d{2}|\d{1,2}\s*(am|pm)|morning|afternoon|evening|daily|weekly|monthly|weekdays|every\s+\w+)\b/i;
+
+// ── Telegram webhook body type ─────────────────────
+
+interface TelegramWebhookBody {
+  callback_query?: {
+    id: string;
+    data?: string;
+    message?: { chat?: { id: number } };
+  };
+  message?: {
+    text?: string;
+    chat?: { id: number };
+  };
+}
+
 // ── Helpers ─────────────────────────────────────────
 
 function parseAddCommand(text: string): {
@@ -58,7 +75,7 @@ function buildTaskContext(tasks: Array<{ title: string; workstream: string; stat
   }));
 }
 
-// Build a typed edit patch from AI-parsed fields
+// Build a typed edit patch from AI-parsed fields — uses !== undefined/null to preserve falsy values
 function buildEditPatch(fields: {
   title?: string | null;
   workstream?: "practice" | "personal" | "family" | null;
@@ -69,14 +86,49 @@ function buildEditPatch(fields: {
   recurring?: "daily" | "weekdays" | "weekly" | "monthly" | null;
 }) {
   return {
-    ...(fields.title ? { title: fields.title } : {}),
-    ...(fields.workstream ? { workstream: fields.workstream } : {}),
-    ...(fields.priority ? { priority: fields.priority } : {}),
-    ...(fields.dueDate ? { dueDate: new Date(fields.dueDate).getTime() } : {}),
-    ...(fields.dueTime ? { dueTime: fields.dueTime } : {}),
-    ...(fields.notes ? { notes: fields.notes } : {}),
-    ...(fields.recurring ? { recurring: fields.recurring } : {}),
+    ...(fields.title !== undefined && fields.title !== null ? { title: fields.title } : {}),
+    ...(fields.workstream !== undefined && fields.workstream !== null ? { workstream: fields.workstream } : {}),
+    ...(fields.priority !== undefined && fields.priority !== null ? { priority: fields.priority } : {}),
+    ...(fields.dueDate !== undefined && fields.dueDate !== null ? { dueDate: new Date(fields.dueDate).getTime() } : {}),
+    ...(fields.dueTime !== undefined && fields.dueTime !== null ? { dueTime: fields.dueTime } : {}),
+    ...(fields.notes !== undefined && fields.notes !== null ? { notes: fields.notes } : {}),
+    ...(fields.recurring !== undefined && fields.recurring !== null ? { recurring: fields.recurring } : {}),
   };
+}
+
+/** Validate a Convex-style ID string (alphanumeric + underscore-like chars) */
+function isValidConvexId(id: string): boolean {
+  return /^[a-z0-9][a-z0-9_]*$/i.test(id) && id.length > 0 && id.length < 64;
+}
+
+// Shared fallback: add task using simple regex parsing (no AI)
+type FallbackAddCtx = {
+  runMutation: (ref: typeof internal.telegramBot.addTaskFromTelegram, args: {
+    userId: Id<"users">;
+    title: string;
+    workstream: "practice" | "personal" | "family";
+    priority: "high" | "normal";
+  }) => Promise<Id<"tasks">>;
+};
+async function fallbackAdd(
+  ctx: FallbackAddCtx,
+  userId: Id<"users">,
+  rawInput: string,
+  defaultWorkstream: "practice" | "personal" | "family",
+  reply: (chatId: string, text: string) => Promise<void>,
+  chatId: string,
+) {
+  const parsed = parseAddCommand(rawInput);
+  const workstream = parsed.workstream ?? defaultWorkstream;
+  const priority = parsed.priority ?? "normal";
+  const title = (parsed.title || rawInput).slice(0, 200);
+  await ctx.runMutation(internal.telegramBot.addTaskFromTelegram, {
+    userId,
+    title,
+    workstream,
+    priority,
+  });
+  await reply(chatId, formatTaskConfirmation("added", title, workstream));
 }
 
 // ── HTTP Router ─────────────────────────────────────
@@ -97,7 +149,7 @@ http.route({
       return new Response("Unauthorized", { status: 401 });
     }
 
-    const body = await req.json();
+    const body = (await req.json()) as TelegramWebhookBody;
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
 
     // Helper to send a text reply via the centralized sendTextMessage action
@@ -109,7 +161,7 @@ http.route({
     // ── Callback queries (inline keyboard buttons) ──────
     const callbackQuery = body?.callback_query;
     if (callbackQuery?.data) {
-      const data = callbackQuery.data as string;
+      const data = callbackQuery.data;
       const chatId = String(callbackQuery.message?.chat?.id ?? "");
 
       const user = chatId
@@ -119,46 +171,47 @@ http.route({
       if (!user) {
         console.warn("Callback query from unlinked chat:", { chatId, data });
       } else if (data.startsWith("done:")) {
-        const taskId = data.slice(5) as Id<"tasks">;
-        try {
-          const result = await ctx.runMutation(
-            internal.telegramBot.completeTaskFromTelegram,
-            { userId: user._id, taskId },
-          );
-          if (result.success) {
-            const msg = formatTaskConfirmation("completed", result.title, result.workstream);
-            const extra = result.wasRecurring ? "\nNext occurrence created." : "";
-            await reply(chatId, msg + extra);
+        const rawId = data.slice(5);
+        if (isValidConvexId(rawId)) {
+          const taskId = rawId as Id<"tasks">;
+          try {
+            const result = await ctx.runMutation(
+              internal.telegramBot.completeTaskFromTelegram,
+              { userId: user._id, taskId },
+            );
+            if (result.success) {
+              const msg = formatTaskConfirmation("completed", result.title, result.workstream);
+              const extra = result.wasRecurring ? "\nNext occurrence created." : "";
+              await reply(chatId, msg + extra);
+            }
+          } catch (e) {
+            console.error("Failed to complete task from callback:", { rawId, chatId, error: e });
           }
-        } catch (e) {
-          console.error("Failed to complete task from callback:", { taskId, chatId, error: e });
         }
       } else if (data.startsWith("snooze:")) {
-        const taskId = data.slice(7) as Id<"tasks">;
-        try {
-          const result = await ctx.runMutation(internal.telegramBot.snoozeTask, {
-            userId: user._id,
-            taskId,
-            durationMs: SNOOZE_DURATION_MS,
-          });
-          if (result.success) {
-            await reply(chatId, formatSnoozeConfirmation(result.title, result.newReminderAt, user.timezone));
+        const rawId = data.slice(7);
+        if (isValidConvexId(rawId)) {
+          const taskId = rawId as Id<"tasks">;
+          try {
+            const result = await ctx.runMutation(internal.telegramBot.snoozeTask, {
+              userId: user._id,
+              taskId,
+              durationMs: SNOOZE_DURATION_MS,
+            });
+            if (result.success) {
+              await reply(chatId, formatSnoozeConfirmation(result.title, result.newReminderAt, user.timezone));
+            }
+          } catch (e) {
+            console.error("Failed to snooze task from callback:", { rawId, chatId, error: e });
           }
-        } catch (e) {
-          console.error("Failed to snooze task from callback:", { taskId, chatId, error: e });
         }
       }
 
-      // Acknowledge callback to Telegram (fire-and-forget)
-      if (botToken && callbackQuery.id) {
-        await fetch(
-          `https://api.telegram.org/bot${botToken}/answerCallbackQuery`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ callback_query_id: callbackQuery.id }),
-          },
-        );
+      // Acknowledge callback to Telegram via centralized module
+      if (callbackQuery.id) {
+        await ctx.runAction(internal.telegram.answerCallbackQuery, {
+          callbackQueryId: callbackQuery.id,
+        });
       }
 
       return new Response("OK", { status: 200 });
@@ -198,11 +251,20 @@ http.route({
       return new Response("OK", { status: 200 });
     }
 
-    // /add {text} — parse via AI for full field support (dates, times, recurring)
+    // /add {text} — use AI only when date/time/recurring indicators are present
     if (text.startsWith("/add ")) {
       const rawInput = text.slice(5).trim();
       if (!rawInput) {
         await reply(chatId, "Usage: /add Buy supplies tomorrow @practice !high");
+        return new Response("OK", { status: 200 });
+      }
+
+      const defaultWorkstream = user.lastUsedWorkstream ?? "personal";
+      const needsAI = DATE_TIME_PATTERN.test(rawInput);
+
+      if (!needsAI) {
+        // Fast path: no date/time indicators, skip AI
+        await fallbackAdd(ctx, user._id, rawInput, defaultWorkstream, reply, chatId);
         return new Response("OK", { status: 200 });
       }
 
@@ -216,7 +278,7 @@ http.route({
         });
 
         if (aiResult.fields) {
-          const workstream = aiResult.fields.workstream ?? user.lastUsedWorkstream ?? "personal";
+          const workstream = aiResult.fields.workstream ?? defaultWorkstream;
           const priority = aiResult.fields.priority ?? "normal";
           const title = (aiResult.fields.title ?? rawInput).slice(0, 200);
 
@@ -232,36 +294,14 @@ http.route({
           });
           await reply(chatId, formatTaskConfirmation("added", title, workstream));
         } else {
-          // AI returned no fields — fall back to simple parse
-          const parsed = parseAddCommand(rawInput);
-          const workstream = parsed.workstream ?? user.lastUsedWorkstream ?? "personal";
-          const priority = parsed.priority ?? "normal";
-          const title = parsed.title || rawInput;
-          await ctx.runMutation(internal.telegramBot.addTaskFromTelegram, {
-            userId: user._id,
-            title,
-            workstream,
-            priority,
-          });
-          await reply(chatId, formatTaskConfirmation("added", title, workstream));
+          await fallbackAdd(ctx, user._id, rawInput, defaultWorkstream, reply, chatId);
         }
       } catch (e: unknown) {
-        // AI failure — fall back to simple parse
         const msg = e instanceof Error ? e.message : "";
         if (msg.includes("Rate limited")) {
           await reply(chatId, msg);
         } else {
-          const parsed = parseAddCommand(rawInput);
-          const workstream = parsed.workstream ?? user.lastUsedWorkstream ?? "personal";
-          const priority = parsed.priority ?? "normal";
-          const title = parsed.title || rawInput;
-          await ctx.runMutation(internal.telegramBot.addTaskFromTelegram, {
-            userId: user._id,
-            title,
-            workstream,
-            priority,
-          });
-          await reply(chatId, formatTaskConfirmation("added", title, workstream));
+          await fallbackAdd(ctx, user._id, rawInput, defaultWorkstream, reply, chatId);
         }
       }
       return new Response("OK", { status: 200 });
@@ -708,29 +748,14 @@ http.route({
         }
       } else {
         // AI couldn't determine intent — fall back to simple add
-        const workstream = user.lastUsedWorkstream ?? "personal";
-        await ctx.runMutation(internal.telegramBot.addTaskFromTelegram, {
-          userId: user._id,
-          title: text.slice(0, 200),
-          workstream,
-          priority: "normal",
-        });
-        await reply(chatId, formatTaskConfirmation("added", text.slice(0, 200), workstream));
+        await fallbackAdd(ctx, user._id, text, user.lastUsedWorkstream ?? "personal", reply, chatId);
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "";
       if (msg.includes("Rate limited")) {
         await reply(chatId, msg);
       } else {
-        // Fallback: treat as simple task add
-        const workstream = user.lastUsedWorkstream ?? "personal";
-        await ctx.runMutation(internal.telegramBot.addTaskFromTelegram, {
-          userId: user._id,
-          title: text.slice(0, 200),
-          workstream,
-          priority: "normal",
-        });
-        await reply(chatId, formatTaskConfirmation("added", text.slice(0, 200), workstream));
+        await fallbackAdd(ctx, user._id, text, user.lastUsedWorkstream ?? "personal", reply, chatId);
       }
     }
 

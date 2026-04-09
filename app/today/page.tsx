@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { AppShell } from "@/components/layout/AppShell";
 import { TaskDetailView } from "@/components/task/TaskDetailView";
+import { UndoToast } from "@/components/ui/UndoToast";
+import { ErrorToast } from "@/components/ui/ErrorToast";
 import { Icon } from "@/components/ui/Icon";
 import { WORKSTREAM_CONFIG } from "@/lib/constants";
 import type { TaskFormData } from "@/lib/constants";
@@ -13,7 +15,8 @@ import { toCSTDateString, fromDateInputValue } from "@/lib/dates";
 import { useTaskActions } from "@/hooks/useTaskActions";
 
 export default function TodayPage() {
-  const tasks = useQuery(api.tasks.getTasksByStatus);
+  const tasks = useQuery(api.tasks.getTasksByStatus, {});
+  const staffList = useQuery(api.staff.listStaff);
   const {
     editingTask,
     setEditingTask,
@@ -22,9 +25,14 @@ export default function TodayPage() {
     handleSave,
     handleDelete,
     handleComplete,
-  } = useTaskActions();
+    handleUndo,
+    undoAction,
+    clearUndo,
+    errorMessage,
+    clearError,
+  } = useTaskActions(tasks);
 
-  const todayStr = toCSTDateString(Date.now());
+  const [todayStr] = useState(() => toCSTDateString(Date.now()));
 
   const { overdue, today, noDueDate } = useMemo(() => {
     const overdue: Doc<"tasks">[] = [];
@@ -129,10 +137,23 @@ export default function TodayPage() {
         <TaskDetailView
           task={editingTask}
           prefill={isCreating ? todayPrefill : undefined}
+          staffMembers={staffList ?? []}
           onSave={handleSave}
           onDelete={editingTask ? () => handleDelete(editingTask._id) : undefined}
           onClose={() => { setEditingTask(null); setIsCreating(false); }}
         />
+      )}
+
+      {undoAction && (
+        <UndoToast
+          message="Task completed"
+          onUndo={handleUndo}
+          onExpire={clearUndo}
+        />
+      )}
+
+      {errorMessage && !undoAction && (
+        <ErrorToast message={errorMessage} onDismiss={clearError} />
       )}
     </AppShell>
   );

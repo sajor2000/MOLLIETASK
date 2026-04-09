@@ -1,8 +1,12 @@
 "use client";
 
-import { ReactNode, useCallback, useEffect, useRef } from "react";
-import { ConvexReactClient, useMutation } from "convex/react";
-import { ConvexProviderWithAuth, Authenticated } from "convex/react";
+import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import {
+  ConvexReactClient,
+  useMutation,
+  ConvexProviderWithAuth,
+  Authenticated,
+} from "convex/react";
 import {
   AuthKitProvider,
   useAuth,
@@ -12,16 +16,27 @@ import { api } from "@/convex/_generated/api";
 
 const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
-function StoreUser() {
+/**
+ * Calls the users.store mutation once per session to ensure the authenticated
+ * user has a record in the Convex users table. Renders children only after
+ * the store completes, preventing "User not found" errors on first login.
+ */
+function StoreUser({ children }: { children: ReactNode }) {
   const storeUser = useMutation(api.users.store);
-  const hasStored = useRef(false);
+  const [ready, setReady] = useState(false);
+
   useEffect(() => {
-    if (!hasStored.current) {
-      hasStored.current = true;
-      storeUser().catch(() => {});
-    }
+    storeUser()
+      .then(() => setReady(true))
+      .catch((err) => {
+        console.error("Failed to store user:", err);
+        // Still render children so the app is usable even if store fails
+        setReady(true);
+      });
   }, [storeUser]);
-  return null;
+
+  if (!ready) return null;
+  return <>{children}</>;
 }
 
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
@@ -29,9 +44,8 @@ export function ConvexClientProvider({ children }: { children: ReactNode }) {
     <AuthKitProvider>
       <ConvexProviderWithAuth client={convex} useAuth={useAuthFromAuthKit}>
         <Authenticated>
-          <StoreUser />
+          <StoreUser>{children}</StoreUser>
         </Authenticated>
-        {children}
       </ConvexProviderWithAuth>
     </AuthKitProvider>
   );
@@ -47,17 +61,31 @@ function useAuthFromAuthKit() {
   const loading = (isLoading ?? false) || (tokenLoading ?? false);
   const authenticated = !!user && !!accessToken && !loading;
 
+  // Hold the last valid token to avoid returning null during refresh.
+  // Updated in useEffect to comply with React's pure-render expectations.
   const stableAccessToken = useRef<string | null>(null);
-  if (accessToken && !tokenError) {
-    stableAccessToken.current = accessToken;
-  }
-
-  const fetchAccessToken = useCallback(async () => {
-    if (stableAccessToken.current && !tokenError) {
-      return stableAccessToken.current;
+  useEffect(() => {
+    if (tokenError || !accessToken) {
+      stableAccessToken.current = null;
+    } else {
+      stableAccessToken.current = accessToken;
     }
-    return null;
-  }, [tokenError]);
+  }, [accessToken, tokenError]);
+
+  const fetchAccessToken = useCallback(
+    async ({ forceRefreshToken }: { forceRefreshToken: boolean }) => {
+      // When Convex requests a forced refresh, return the live hook value
+      // rather than the cached ref so token rotation takes effect.
+      if (forceRefreshToken) {
+        return accessToken ?? null;
+      }
+      if (stableAccessToken.current && !tokenError) {
+        return stableAccessToken.current;
+      }
+      return accessToken ?? null;
+    },
+    [accessToken, tokenError],
+  );
 
   return {
     isLoading: loading,

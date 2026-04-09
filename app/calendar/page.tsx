@@ -6,6 +6,8 @@ import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { AppShell } from "@/components/layout/AppShell";
 import { TaskDetailView } from "@/components/task/TaskDetailView";
+import { UndoToast } from "@/components/ui/UndoToast";
+import { ErrorToast } from "@/components/ui/ErrorToast";
 import { Icon } from "@/components/ui/Icon";
 import { WORKSTREAM_CONFIG } from "@/lib/constants";
 import type { TaskFormData } from "@/lib/constants";
@@ -19,7 +21,8 @@ const MONTHS = [
 ];
 
 export default function CalendarPage() {
-  const tasks = useQuery(api.tasks.getTasksByStatus);
+  const tasks = useQuery(api.tasks.getTasksByStatus, {});
+  const staffList = useQuery(api.staff.listStaff);
   const {
     editingTask,
     setEditingTask,
@@ -28,12 +31,17 @@ export default function CalendarPage() {
     handleSave,
     handleDelete,
     handleComplete,
-  } = useTaskActions();
+    handleUndo,
+    undoAction,
+    clearUndo,
+    errorMessage,
+    clearError,
+  } = useTaskActions(tasks);
 
   const [viewDate, setViewDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-  const todayStr = toCSTDateString(Date.now());
+  const [todayStr] = useState(() => toCSTDateString(Date.now()));
 
   // Group non-done tasks by CST date string, scoped to the visible month range
   const tasksByDate = useMemo(() => {
@@ -263,10 +271,23 @@ export default function CalendarPage() {
         <TaskDetailView
           task={editingTask}
           prefill={createPrefill}
+          staffMembers={staffList ?? []}
           onSave={handleSave}
           onDelete={editingTask ? () => handleDelete(editingTask._id) : undefined}
           onClose={() => { setEditingTask(null); setIsCreating(false); }}
         />
+      )}
+
+      {undoAction && (
+        <UndoToast
+          message="Task completed"
+          onUndo={handleUndo}
+          onExpire={clearUndo}
+        />
+      )}
+
+      {errorMessage && !undoAction && (
+        <ErrorToast message={errorMessage} onDismiss={clearError} />
       )}
     </AppShell>
   );

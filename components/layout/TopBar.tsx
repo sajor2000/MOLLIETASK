@@ -8,12 +8,13 @@ import { SearchInput } from "./SearchInput";
 
 interface TopBarProps {
   onAddTask?: () => void;
+  onOpenTemplates?: () => void;
   topBarExtra?: ReactNode;
   searchQuery?: string;
   onSearchChange?: (value: string) => void;
 }
 
-export function TopBar({ onAddTask, topBarExtra, searchQuery, onSearchChange }: TopBarProps) {
+export function TopBar({ onAddTask, onOpenTemplates, topBarExtra, searchQuery, onSearchChange }: TopBarProps) {
   const pathname = usePathname();
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
@@ -71,6 +72,16 @@ export function TopBar({ onAddTask, topBarExtra, searchQuery, onSearchChange }: 
             aria-label="Search"
           >
             <Icon name="search" className="w-5 h-5" />
+          </button>
+        )}
+
+        {onOpenTemplates && (
+          <button
+            onClick={onOpenTemplates}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border/30 text-text-secondary text-[12px] font-medium rounded-[4px] hover:border-accent/30 hover:text-accent transition-colors duration-200"
+          >
+            <Icon name="auto_awesome" className="w-[16px] h-[16px]" />
+            <span className="hidden sm:inline">Templates</span>
           </button>
         )}
 
