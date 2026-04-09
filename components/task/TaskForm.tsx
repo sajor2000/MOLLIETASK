@@ -124,7 +124,7 @@ export function TaskForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-1 flex-col min-h-0">
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y px-6 pb-6 space-y-6 [-webkit-overflow-scrolling:touch]">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y px-6 pb-24 space-y-6 [-webkit-overflow-scrolling:touch]">
         {/* Title */}
         <div>
           <input
@@ -199,7 +199,7 @@ export function TaskForm({
                   const match = staffMembers.find((s) => s._id === val);
                   setAssignedStaffId(match ? match._id : null);
                 }}
-                className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
+                className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
               >
                 <option value="">Me (default)</option>
                 {[...staffMembers]
@@ -229,7 +229,7 @@ export function TaskForm({
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
-              className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
+              className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
             />
           </div>
           <div>
@@ -241,7 +241,7 @@ export function TaskForm({
               value={dueTime}
               onChange={(e) => setDueTime(e.target.value)}
               disabled={!dueDate}
-              className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary disabled:opacity-40 focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
+              className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary disabled:opacity-60 focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
             />
           </div>
         </div>
@@ -262,7 +262,7 @@ export function TaskForm({
                   d.setDate(d.getDate() + offset);
                   setDueDate(toDateInputValue(d.getTime()));
                 }}
-                className="px-3 py-1 text-[12px] text-text-secondary bg-bg-base border border-border/15 rounded-[4px] hover:border-accent/30 transition-colors duration-200"
+                className="px-3 py-1 text-[12px] text-text-secondary bg-bg-base border border-border/40 rounded-[4px] hover:border-accent/30 transition-colors duration-200"
               >
                 {label}
               </button>
@@ -291,7 +291,7 @@ export function TaskForm({
             placeholder="Add notes..."
             maxLength={2000}
             rows={3}
-            className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 resize-none"
+            className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 resize-none"
           />
         </div>
 
@@ -311,7 +311,7 @@ export function TaskForm({
       </div>
 
       {/* Actions */}
-      <div className="px-6 py-4 border-t border-border">
+      <div className="sticky bottom-0 z-10 px-6 py-4 border-t border-border bg-surface-elevated/95 backdrop-blur supports-[backdrop-filter]:bg-surface-elevated/75 [padding-bottom:calc(theme(spacing.4)+env(safe-area-inset-bottom))] shadow-[0_-10px_30px_-20px_rgba(0,0,0,0.9)]">
         {showDeleteConfirm ? (
           <div className="flex gap-3">
             <button

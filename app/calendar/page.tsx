@@ -8,6 +8,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { TaskDetailView } from "@/components/task/TaskDetailView";
 import { UndoToast } from "@/components/ui/UndoToast";
 import { ErrorToast } from "@/components/ui/ErrorToast";
+import { SuccessToast } from "@/components/ui/SuccessToast";
 import { Icon } from "@/components/ui/Icon";
 import { WORKSTREAM_CONFIG } from "@/lib/constants";
 import type { TaskFormData } from "@/lib/constants";
@@ -36,6 +37,8 @@ export default function CalendarPage() {
     clearUndo,
     errorMessage,
     clearError,
+    successMessage,
+    clearSuccess,
   } = useTaskActions(tasks);
 
   const [viewDate, setViewDate] = useState(() => new Date());
@@ -238,7 +241,7 @@ export default function CalendarPage() {
                     >
                       <button
                         onClick={() => handleComplete(task._id)}
-                        className="flex-shrink-0 w-4.5 h-4.5 rounded-full border-2 border-border hover:border-accent transition-colors"
+                        className="flex-shrink-0 w-5 h-5 rounded-full border-2 border-text-muted/60 hover:border-accent transition-colors duration-200"
                         aria-label="Complete"
                       />
                       <button
@@ -288,6 +291,10 @@ export default function CalendarPage() {
 
       {errorMessage && !undoAction && (
         <ErrorToast message={errorMessage} onDismiss={clearError} />
+      )}
+
+      {successMessage && !undoAction && !errorMessage && (
+        <SuccessToast message={successMessage} onDismiss={clearSuccess} />
       )}
     </AppShell>
   );

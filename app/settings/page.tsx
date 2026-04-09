@@ -98,7 +98,7 @@ export default function SettingsPage() {
             value={user.timezone ?? "America/Chicago"}
             onChange={(e) => handleTimezone(e.target.value)}
             disabled={saving === "timezone"}
-            className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
+            className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
           >
             {TIMEZONE_OPTIONS.map((tz) => (
               <option key={tz.value} value={tz.value}>
@@ -118,7 +118,7 @@ export default function SettingsPage() {
             value={user.digestTime ?? ""}
             onChange={(e) => handleDigestTime(e.target.value)}
             disabled={saving === "digest"}
-            className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
+            className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
           />
           {user.digestTime && (
             <button
@@ -152,7 +152,7 @@ export default function SettingsPage() {
               <p className="text-[12px] text-text-muted">
                 Send this command to your Telegram bot:
               </p>
-              <code className="block bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-accent font-mono break-all select-all">
+              <code className="block bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-accent font-mono break-all select-all">
                 /start {telegramToken}
               </code>
               <p className="text-[11px] text-text-muted">
@@ -167,7 +167,7 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={handleGenerateToken}
-                className="flex items-center gap-2 px-3 py-2 bg-surface border border-border/15 rounded-[4px] text-[13px] text-text-secondary hover:text-text-primary hover:border-accent/30 transition-colors duration-200"
+                className="flex items-center gap-2 px-3 py-2 bg-surface border border-border/40 rounded-[4px] text-[13px] text-text-secondary hover:text-text-primary hover:border-accent/30 transition-colors duration-200"
               >
                 <Icon name="link" className="w-4 h-4" />
                 Generate link token
@@ -187,7 +187,7 @@ export default function SettingsPage() {
             <button
               type="button"
               onClick={handleSignOut}
-              className="flex items-center gap-2 px-3 py-2 bg-surface border border-border/15 rounded-[4px] text-[13px] text-text-secondary hover:text-text-primary hover:border-accent/30 transition-colors duration-200 w-full"
+              className="flex items-center gap-2 px-3 py-2 bg-surface border border-border/40 rounded-[4px] text-[13px] text-text-secondary hover:text-text-primary hover:border-accent/30 transition-colors duration-200 w-full"
             >
               <Icon name="logout" className="w-4 h-4" />
               Sign out

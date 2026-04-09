@@ -81,7 +81,7 @@ export function TaskAttachments({ taskId }: TaskAttachmentsProps) {
         type="button"
         disabled={uploading}
         onClick={() => inputRef.current?.click()}
-        className="w-full flex items-center justify-center gap-2 py-2 px-3 text-[13px] text-text-secondary bg-bg-base border border-border/15 border-dashed rounded-[4px] hover:border-accent/40 hover:text-text-primary disabled:opacity-50 transition-colors duration-200"
+        className="w-full flex items-center justify-center gap-2 py-2 px-3 text-[13px] text-text-secondary bg-bg-base border border-border/40 border-dashed rounded-[4px] hover:border-accent/40 hover:text-text-primary disabled:opacity-50 transition-colors duration-200"
       >
         <Icon name="add" className="w-4 h-4" />
         {uploading ? "Uploading…" : "Add file"}
@@ -98,7 +98,7 @@ export function TaskAttachments({ taskId }: TaskAttachmentsProps) {
           {attachments.map((a) => (
             <li
               key={a._id}
-              className="flex items-center gap-2 text-[13px] bg-bg-base border border-border/15 rounded-[4px] px-3 py-2"
+              className="flex items-center gap-2 text-[13px] bg-bg-base border border-border/40 rounded-[4px] px-3 py-2"
             >
               <span className="flex-1 min-w-0 truncate text-text-primary" title={a.filename ?? "File"}>
                 {a.filename ?? "File"}

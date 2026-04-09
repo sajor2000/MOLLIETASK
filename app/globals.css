@@ -9,21 +9,21 @@
   --color-surface-elevated: #212729;
 
   /* Borders */
-  --color-border: #212729;
-  --color-outline-variant: #43494c;
+  --color-border: #2e3538;
+  --color-outline-variant: #4d5659;
 
   /* Text */
-  --color-text-primary: #e1e6ea;
-  --color-text-secondary: #82a4a9;
-  --color-text-muted: #4d5e62;
+  --color-text-primary: #e4e9ed;
+  --color-text-secondary: #8fb8be;
+  --color-text-muted: #6b8186;
 
   /* Accent — primary from spec */
-  --color-accent: #9fced9;
-  --color-accent-light: #acdce7;
+  --color-accent: #7fd4e6;
+  --color-accent-light: #99e0ee;
 
   /* Status */
-  --color-destructive: #b05050;
-  --color-success: #4a8c7e;
+  --color-destructive: #e07070;
+  --color-success: #5cc0a8;
 
   /* Spacing base */
   --spacing: 0.25rem;
@@ -96,6 +96,45 @@ strong, b {
     opacity: 1;
     transform: scale(1);
   }
+}
+
+/* Completion checkmark pop — Things 3 inspired */
+@keyframes checkPop {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Task row fade-out after completion */
+@keyframes completeFade {
+  0% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+}
+
+/* Focus indicator — WCAG 2.1 keyboard navigation */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Remove outline on mouse click but keep for keyboard */
+:focus:not(:focus-visible) {
+  outline: none;
 }
 
 /* Safe area for iOS */

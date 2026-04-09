@@ -83,7 +83,7 @@ export function TemplateLibrary({ onClose, onEditTask }: TemplateLibraryProps) {
 
       <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-6">
         <div
-          className="bg-surface-elevated border-t border-x md:border border-border rounded-t-[8px] md:rounded-[4px] w-full md:max-w-[560px] max-h-[85vh] md:max-h-[80vh] flex flex-col animate-[slideUp_200ms_ease-out] md:animate-[fadeIn_150ms_ease-out]"
+          className="bg-surface-elevated border-t border-x md:border border-border rounded-t-[8px] md:rounded-[4px] w-full md:max-w-[560px] max-h-[85dvh] md:max-h-[80vh] flex flex-col min-h-0 overflow-hidden animate-[slideUp_200ms_ease-out] md:animate-[fadeIn_150ms_ease-out]"
           role="dialog"
           aria-modal="true"
           aria-label="Task templates"
@@ -127,7 +127,7 @@ export function TemplateLibrary({ onClose, onEditTask }: TemplateLibraryProps) {
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto px-6 pb-6">
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-6">
             {loading ? (
               <p className="text-[13px] text-text-muted pt-4">Loading templates...</p>
             ) : editingTemplate ? (
@@ -151,7 +151,7 @@ export function TemplateLibrary({ onClose, onEditTask }: TemplateLibraryProps) {
                   <button
                     key={cat.label}
                     onClick={() => setSelectedCategory(cat.label)}
-                    className="w-full text-left px-4 py-3 bg-bg-base border border-border/15 rounded-[4px] hover:border-accent/30 transition-colors duration-200 group"
+                    className="w-full text-left px-4 py-3 bg-bg-base border border-border/40 rounded-[4px] hover:border-accent/30 transition-colors duration-200 group"
                   >
                     <div className="flex items-center justify-between">
                       <div>
@@ -233,7 +233,7 @@ function TemplateCard({
   const isConfirmingDelete = confirmDelete === template._id;
 
   return (
-    <div className="bg-bg-base border border-border/15 rounded-[4px] overflow-hidden">
+    <div className="bg-bg-base border border-border/40 rounded-[4px] overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full text-left px-4 py-3 hover:bg-surface transition-colors duration-200"
@@ -418,7 +418,7 @@ function TemplateEditor({
           placeholder="e.g. Run payroll"
           maxLength={200}
           autoFocus
-          className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200"
+          className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200"
         />
       </div>
 
@@ -432,7 +432,7 @@ function TemplateEditor({
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
+              className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
             >
               {categories.map((c) => (
                 <option key={c} value={c}>{c}</option>
@@ -454,7 +454,7 @@ function TemplateEditor({
               onChange={(e) => setCustomCategory(e.target.value)}
               placeholder="New category name"
               maxLength={100}
-              className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200"
+              className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200"
             />
             <button
               type="button"
@@ -502,7 +502,7 @@ function TemplateEditor({
           placeholder="Instructions or context for this task..."
           maxLength={2000}
           rows={2}
-          className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 resize-none"
+          className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 resize-none"
         />
       </div>
 
@@ -516,7 +516,7 @@ function TemplateEditor({
           onChange={(e) => setSubtasksText(e.target.value)}
           placeholder={"Review timesheets\nSubmit to processor\nDistribute pay stubs"}
           rows={4}
-          className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 resize-none font-mono"
+          className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 resize-none font-mono"
         />
       </div>
 
