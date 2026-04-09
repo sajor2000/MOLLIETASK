@@ -253,6 +253,11 @@ export default function CalendarPage() {
                           <span className={`text-[11px] ${wsConfig.textClass}`}>
                             {wsConfig.label}
                           </span>
+                          {task.recurring && (
+                            <span className="inline-flex items-center text-accent/70" title={`Repeats ${task.recurring}`}>
+                              <Icon name="repeat" className="w-3 h-3" />
+                            </span>
+                          )}
                           {task.priority === "high" && (
                             <span className="text-[11px] text-destructive">High</span>
                           )}

@@ -170,7 +170,7 @@ export const AiCaptureBar = memo(function AiCaptureBar({
           placeholder="Add a task... try natural language"
           disabled={isLoading}
           maxLength={500}
-          className="bg-bg-base border border-outline-variant/10 rounded-[4px] pl-9 pr-4 py-1.5 text-[12px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 w-64 disabled:opacity-60"
+          className="bg-bg-base border border-outline-variant/10 rounded-[4px] pl-9 pr-4 pt-1.5 pb-2 text-[12px] leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 w-64 disabled:opacity-60"
         />
       </div>
 

@@ -418,7 +418,7 @@ function TemplateEditor({
           placeholder="e.g. Run payroll"
           maxLength={200}
           autoFocus
-          className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200"
+          className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 pt-2 pb-2.5 text-[13px] leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200"
         />
       </div>
 
@@ -432,7 +432,7 @@ function TemplateEditor({
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
+              className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 pt-2 pb-2.5 text-[13px] leading-relaxed text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
             >
               {categories.map((c) => (
                 <option key={c} value={c}>{c}</option>
@@ -454,7 +454,7 @@ function TemplateEditor({
               onChange={(e) => setCustomCategory(e.target.value)}
               placeholder="New category name"
               maxLength={100}
-              className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200"
+              className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 pt-2 pb-2.5 text-[13px] leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200"
             />
             <button
               type="button"
@@ -502,7 +502,7 @@ function TemplateEditor({
           placeholder="Instructions or context for this task..."
           maxLength={2000}
           rows={2}
-          className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 resize-none"
+          className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 pt-2 pb-2.5 text-[13px] leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 resize-none"
         />
       </div>
 
@@ -516,7 +516,7 @@ function TemplateEditor({
           onChange={(e) => setSubtasksText(e.target.value)}
           placeholder={"Review timesheets\nSubmit to processor\nDistribute pay stubs"}
           rows={4}
-          className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 resize-none font-mono"
+          className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 pt-2 pb-2.5 text-[13px] leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 resize-none font-mono"
         />
       </div>
 

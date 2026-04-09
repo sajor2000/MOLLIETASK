@@ -183,7 +183,7 @@ export default function TeamPage() {
               onChange={(e) => setName(e.target.value)}
               placeholder="Name"
               maxLength={120}
-              className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200"
+              className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 pt-2 pb-2.5 text-[13px] leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200"
             />
             <input
               type="text"
@@ -191,7 +191,7 @@ export default function TeamPage() {
               onChange={(e) => setRoleTitle(e.target.value)}
               placeholder="Role (e.g. Lead hygienist)"
               maxLength={120}
-              className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200"
+              className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 pt-2 pb-2.5 text-[13px] leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200"
             />
             <textarea
               value={bio}
@@ -199,7 +199,7 @@ export default function TeamPage() {
               placeholder="Bio (optional, Meet-the-Team style)"
               rows={4}
               maxLength={12000}
-              className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 resize-y min-h-[88px]"
+              className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 pt-2 pb-2.5 text-[13px] leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 resize-y min-h-[88px]"
             />
             <button
               type="button"
@@ -244,13 +244,13 @@ export default function TeamPage() {
                       <input
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
-                        className="w-full bg-bg-base border border-border/40 rounded-[4px] px-2 py-1.5 text-[13px] text-text-primary focus:outline-none focus:border-accent"
+                        className="w-full bg-bg-base border border-border/40 rounded-[4px] px-2 pt-1.5 pb-2 text-[13px] leading-relaxed text-text-primary focus:outline-none focus:border-accent"
                         maxLength={120}
                       />
                       <input
                         value={editRole}
                         onChange={(e) => setEditRole(e.target.value)}
-                        className="w-full bg-bg-base border border-border/40 rounded-[4px] px-2 py-1.5 text-[13px] text-text-primary focus:outline-none focus:border-accent"
+                        className="w-full bg-bg-base border border-border/40 rounded-[4px] px-2 pt-1.5 pb-2 text-[13px] leading-relaxed text-text-primary focus:outline-none focus:border-accent"
                         maxLength={120}
                       />
                       <textarea
@@ -259,7 +259,7 @@ export default function TeamPage() {
                         placeholder="Bio (optional)"
                         rows={5}
                         maxLength={12000}
-                        className="w-full bg-bg-base border border-border/40 rounded-[4px] px-2 py-1.5 text-[13px] text-text-primary focus:outline-none focus:border-accent resize-y min-h-[100px]"
+                        className="w-full bg-bg-base border border-border/40 rounded-[4px] px-2 pt-1.5 pb-2 text-[13px] leading-relaxed text-text-primary focus:outline-none focus:border-accent resize-y min-h-[100px]"
                       />
                       <div className="flex gap-2 pt-1">
                         <button

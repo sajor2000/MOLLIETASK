@@ -112,6 +112,11 @@ export const TaskCard = memo(function TaskCard({
                 {assigneeInitials}
               </span>
             )}
+            {task.recurring && (
+              <span className="inline-flex items-center gap-0.5 text-[11px] text-accent/70" title={`Repeats ${task.recurring}`}>
+                <Icon name="repeat" className="w-3 h-3" />
+              </span>
+            )}
             {dueLabel && (
               <span
                 className={`text-[11px] ${

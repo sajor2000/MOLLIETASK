@@ -98,7 +98,7 @@ export default function SettingsPage() {
             value={user.timezone ?? "America/Chicago"}
             onChange={(e) => handleTimezone(e.target.value)}
             disabled={saving === "timezone"}
-            className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
+            className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 pt-2 pb-2.5 text-[13px] leading-relaxed text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
           >
             {TIMEZONE_OPTIONS.map((tz) => (
               <option key={tz.value} value={tz.value}>
@@ -118,7 +118,7 @@ export default function SettingsPage() {
             value={user.digestTime ?? ""}
             onChange={(e) => handleDigestTime(e.target.value)}
             disabled={saving === "digest"}
-            className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
+            className="w-full bg-bg-base border border-border/40 rounded-[4px] px-3 pt-2 pb-2.5 text-[13px] leading-relaxed text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
           />
           {user.digestTime && (
             <button
