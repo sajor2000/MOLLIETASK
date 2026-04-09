@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
@@ -32,7 +32,7 @@ export default function TodayPage() {
     clearError,
   } = useTaskActions(tasks);
 
-  const todayStr = toCSTDateString(Date.now());
+  const [todayStr] = useState(() => toCSTDateString(Date.now()));
 
   const { overdue, today, noDueDate } = useMemo(() => {
     const overdue: Doc<"tasks">[] = [];

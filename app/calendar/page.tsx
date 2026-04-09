@@ -41,7 +41,7 @@ export default function CalendarPage() {
   const [viewDate, setViewDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-  const todayStr = toCSTDateString(Date.now());
+  const [todayStr] = useState(() => toCSTDateString(Date.now()));
 
   // Group non-done tasks by CST date string, scoped to the visible month range
   const tasksByDate = useMemo(() => {

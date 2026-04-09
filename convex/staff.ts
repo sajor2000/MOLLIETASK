@@ -97,7 +97,11 @@ export const updateStaff = mutation({
     const row = await getStaffOwnedBy(ctx, staffId, ownerUserId);
     if (!row) throw new Error("Staff member not found");
 
-    const patch: Record<string, unknown> = {};
+    const patch: Partial<{
+      name: string;
+      roleTitle: string;
+      bio: string;
+    }> = {};
     if (name !== undefined) {
       const t = name.trim();
       if (!t) throw new Error("Name is required");

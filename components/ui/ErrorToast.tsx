@@ -15,7 +15,9 @@ export function ErrorToast({
   duration = 4000,
 }: ErrorToastProps) {
   const onDismissRef = useRef(onDismiss);
-  onDismissRef.current = onDismiss;
+  useEffect(() => {
+    onDismissRef.current = onDismiss;
+  });
 
   useEffect(() => {
     const timer = setTimeout(() => onDismissRef.current(), duration);

@@ -58,10 +58,11 @@ export function TaskForm({
   const [assignedStaffId, setAssignedStaffId] = useState<Id<"staffMembers"> | null>(
     task?.assignedStaffId ?? prefill?.assignedStaffId ?? null,
   );
-
-  useEffect(() => {
+  const [prevTaskId, setPrevTaskId] = useState(task?._id);
+  if (task?._id !== prevTaskId) {
+    setPrevTaskId(task?._id);
     setAssignedStaffId(task?.assignedStaffId ?? prefill?.assignedStaffId ?? null);
-  }, [task?._id, task?.assignedStaffId, prefill?.assignedStaffId]);
+  }
 
   const staffSlots = useMemo(
     () => [...staffMembers].sort((a, b) => a.sortOrder - b.sortOrder).slice(0, 9),

@@ -31,7 +31,9 @@ export function TaskDetailView({
 
   // Use ref to avoid re-attaching listener when onClose changes
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {

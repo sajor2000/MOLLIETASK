@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useConvex, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
@@ -35,7 +35,9 @@ export function useTaskActions(tasks?: Doc<"tasks">[]) {
 
   // Stable ref for tasks to avoid re-renders in callbacks
   const tasksRef = useRef(tasks);
-  tasksRef.current = tasks;
+  useEffect(() => {
+    tasksRef.current = tasks;
+  });
 
   // Modal/form state
   const [editingTask, setEditingTask] = useState<Doc<"tasks"> | null>(null);
