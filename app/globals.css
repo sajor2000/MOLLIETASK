@@ -1,0 +1,113 @@
+@import "tailwindcss";
+
+@theme {
+  /* Background — surface_dim from spec */
+  --color-bg-base: #0c0e0f;
+
+  /* Surfaces */
+  --color-surface: #161a1c;
+  --color-surface-elevated: #212729;
+
+  /* Borders */
+  --color-border: #212729;
+  --color-outline-variant: #43494c;
+
+  /* Text */
+  --color-text-primary: #e1e6ea;
+  --color-text-secondary: #82a4a9;
+  --color-text-muted: #4d5e62;
+
+  /* Accent — primary from spec */
+  --color-accent: #9fced9;
+  --color-accent-light: #acdce7;
+
+  /* Status */
+  --color-destructive: #b05050;
+  --color-success: #4a8c7e;
+
+  /* Spacing base */
+  --spacing: 0.25rem;
+
+  /* Border radius */
+  --radius-sm: 2px;
+  --radius-DEFAULT: 4px;
+  --radius-md: 4px;
+  --radius-lg: 4px;
+}
+
+/* Base styles */
+body {
+  background-color: var(--color-bg-base);
+  color: var(--color-text-primary);
+  font-weight: 400;
+}
+
+/* Ensure no bold text anywhere - design rule */
+strong, b {
+  font-weight: 500;
+}
+
+/* Scrollbar styling for dark theme */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* Animations */
+@keyframes shrink {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Safe area for iOS */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
