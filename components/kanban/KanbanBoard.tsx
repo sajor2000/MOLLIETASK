@@ -29,6 +29,7 @@ interface KanbanBoardProps {
   onMoveTask: (taskId: Id<"tasks">, newStatus: TaskStatus, newSortOrder: number) => void;
   onEditTask: (task: Doc<"tasks">) => void;
   onCompleteTask: (taskId: Id<"tasks">) => void;
+  onClearCompleted?: () => void;
 }
 
 export const KanbanBoard = memo(function KanbanBoard({
@@ -36,6 +37,7 @@ export const KanbanBoard = memo(function KanbanBoard({
   onMoveTask,
   onEditTask,
   onCompleteTask,
+  onClearCompleted,
 }: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -137,6 +139,7 @@ export const KanbanBoard = memo(function KanbanBoard({
             tasks={tasksByStatus[status]}
             onEditTask={onEditTask}
             onCompleteTask={onCompleteTask}
+            onClearCompleted={status === "done" ? onClearCompleted : undefined}
           />
         ))}
       </div>

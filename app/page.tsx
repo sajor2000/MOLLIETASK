@@ -24,6 +24,7 @@ export default function KanbanPage() {
     handleDelete,
     handleComplete,
     handleReorder,
+    handleClearCompleted,
     handleUndo,
     undoAction,
     clearUndo,
@@ -87,6 +88,7 @@ export default function KanbanPage() {
           onMoveTask={handleReorder}
           onEditTask={setEditingTask}
           onCompleteTask={handleComplete}
+          onClearCompleted={handleClearCompleted}
         />
       </div>
 
