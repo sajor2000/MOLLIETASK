@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useConvex } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { AppShell } from "@/components/layout/AppShell";
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
@@ -12,6 +12,7 @@ import type { Doc, Id } from "@/convex/_generated/dataModel";
 import type { TaskStatus, TaskFormData } from "@/lib/constants";
 
 export default function KanbanPage() {
+  const convex = useConvex();
   const tasks = useQuery(api.tasks.getTasksByStatus);
   const addTask = useMutation(api.tasks.addTask);
   const updateTask = useMutation(api.tasks.updateTask);
@@ -75,20 +76,31 @@ export default function KanbanPage() {
   }, [undoAction, uncompleteTask]);
 
   const handleSaveTask = useCallback(
-    (taskData: TaskFormData) => {
+    async (taskData: TaskFormData) => {
       if (editingTask) {
-        updateTask({ taskId: editingTask._id, ...taskData }).catch(() => {
+        try {
+          await updateTask({ taskId: editingTask._id, ...taskData });
+          setEditingTask(null);
+        } catch {
           console.error("Failed to update task");
-        });
-        setEditingTask(null);
+        }
       } else {
-        addTask(taskData).catch(() => {
+        try {
+          const taskId = await addTask(taskData);
+          const doc = await convex.query(api.tasks.getTask, { taskId });
+          if (doc) {
+            setEditingTask(doc);
+            setIsCreating(false);
+          } else {
+            setIsCreating(false);
+          }
+        } catch {
           console.error("Failed to add task");
-        });
-        setIsCreating(false);
+          setIsCreating(false);
+        }
       }
     },
-    [editingTask, updateTask, addTask],
+    [editingTask, updateTask, addTask, convex],
   );
 
   const handleDeleteTask = useCallback(

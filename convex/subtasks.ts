@@ -6,7 +6,7 @@ import type { Id } from "./_generated/dataModel";
 const MAX_SUBTASKS_PER_TASK = 20;
 
 /** Recalculate and patch denormalized subtask counts on the parent task */
-async function updateParentCounts(ctx: MutationCtx, parentTaskId: Id<"tasks">) {
+export async function updateParentCounts(ctx: MutationCtx, parentTaskId: Id<"tasks">) {
   const subtasks = await ctx.db
     .query("subtasks")
     .withIndex("by_parentTaskId_and_sortOrder", (q) =>
@@ -191,56 +191,6 @@ export const addSubtasksBatch = internalMutation({
     }
     await updateParentCounts(ctx, parentTaskId);
     return ids;
-  },
-});
-
-// ── Internal mutations (called by tasks.ts) ──────────
-
-export const deleteByParent = internalMutation({
-  args: { parentTaskId: v.id("tasks") },
-  handler: async (ctx, { parentTaskId }) => {
-    const subtasks = await ctx.db
-      .query("subtasks")
-      .withIndex("by_parentTaskId_and_sortOrder", (q) =>
-        q.eq("parentTaskId", parentTaskId),
-      )
-      .take(50);
-
-    for (const subtask of subtasks) {
-      await ctx.db.delete(subtask._id);
-    }
-    await ctx.db.patch(parentTaskId, { subtaskTotal: 0, subtaskCompleted: 0 });
-  },
-});
-
-export const cloneForNewParent = internalMutation({
-  args: {
-    sourceTaskId: v.id("tasks"),
-    newTaskId: v.id("tasks"),
-    newUserId: v.id("users"),
-  },
-  handler: async (ctx, { sourceTaskId, newTaskId, newUserId }) => {
-    const subtasks = await ctx.db
-      .query("subtasks")
-      .withIndex("by_parentTaskId_and_sortOrder", (q) =>
-        q.eq("parentTaskId", sourceTaskId),
-      )
-      .take(50);
-
-    for (const subtask of subtasks) {
-      await ctx.db.insert("subtasks", {
-        parentTaskId: newTaskId,
-        userId: newUserId,
-        title: subtask.title,
-        isComplete: false,
-        sortOrder: subtask.sortOrder,
-        createdAt: Date.now(),
-      });
-    }
-    await ctx.db.patch(newTaskId, {
-      subtaskTotal: subtasks.length,
-      subtaskCompleted: 0,
-    });
   },
 });
 

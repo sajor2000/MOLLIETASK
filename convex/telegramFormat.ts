@@ -18,7 +18,7 @@ const WORKSTREAM_EMOJI: Record<string, string> = {
   family: "\u{1F46A}",
 };
 
-export function formatTaskList(tasks: TaskForDisplay[]): string {
+export function formatTaskList(tasks: TaskForDisplay[], tz?: string): string {
   if (tasks.length === 0) return "No open tasks. Nice work!";
 
   const groups = new Map<string, TaskForDisplay[]>();
@@ -38,7 +38,7 @@ export function formatTaskList(tasks: TaskForDisplay[]): string {
 
     for (const t of items) {
       const pri = t.priority === "high" ? "[!] " : "";
-      const due = formatDue(t.dueDate, t.dueTime);
+      const due = formatDue(t.dueDate, t.dueTime, tz);
       lines.push(`  ${globalIndex}. ${pri}${t.title}${due}`);
       globalIndex++;
     }
@@ -48,11 +48,12 @@ export function formatTaskList(tasks: TaskForDisplay[]): string {
   return lines.join("\n").trimEnd();
 }
 
-function formatDue(dueDate?: number, dueTime?: string): string {
+function formatDue(dueDate?: number, dueTime?: string, tz?: string): string {
   if (!dueDate) return "";
   const d = new Date(dueDate);
-  const month = d.toLocaleString("en-US", { month: "short", timeZone: DEFAULT_TZ });
-  const day = d.toLocaleString("en-US", { day: "numeric", timeZone: DEFAULT_TZ });
+  const timeZone = tz ?? DEFAULT_TZ;
+  const month = d.toLocaleString("en-US", { month: "short", timeZone });
+  const day = d.toLocaleString("en-US", { day: "numeric", timeZone });
   const time = dueTime ? ` ${dueTime}` : "";
   return ` \u00b7 ${month} ${day}${time}`;
 }
@@ -66,13 +67,13 @@ export function formatTaskConfirmation(
   return `${emoji} ${action.charAt(0).toUpperCase() + action.slice(1)}: ${title} (${workstream})`;
 }
 
-export function formatSnoozeConfirmation(title: string, newReminderAt: number): string {
+export function formatSnoozeConfirmation(title: string, newReminderAt: number, tz?: string): string {
   const d = new Date(newReminderAt);
   const time = d.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
-    timeZone: DEFAULT_TZ,
+    timeZone: tz ?? DEFAULT_TZ,
   });
   return `\u23f0 Snoozed: ${title} \u2014 reminder at ${time}`;
 }
@@ -83,11 +84,17 @@ export function formatEditConfirmation(title: string, changes: string[]): string
 }
 
 export const HELP_TEXT = `Available commands:
-/add Buy supplies @practice !high \u2014 Add a task
+/add Buy supplies tomorrow @practice !high \u2014 Add a task (AI extracts dates/times)
 /tasks \u2014 List your current tasks
+/today \u2014 Show today's tasks and overdue
 /done 3 \u2014 Complete task #3 from list
 /done Buy supplies \u2014 Complete task by name
+/delete 3 \u2014 Delete task #3 from list
+/delete Buy supplies \u2014 Delete task by name
 /edit 3 change priority to high \u2014 Edit task #3
+/subtasks 3 \u2014 List subtasks for task #3
+/addsub 3 Order supplies \u2014 Add subtask to task #3
+/donesub 3.1 \u2014 Toggle subtask #1 of task #3
 /timezone \u2014 Show current timezone
 /timezone Central \u2014 Set timezone
 /digest 08:00 \u2014 Set daily digest time

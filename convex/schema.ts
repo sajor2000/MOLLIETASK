@@ -1,6 +1,5 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-import { authTables } from "@convex-dev/auth/server";
 
 // ── Shared validators (reusable across schema + functions) ───
 export const workstreamValidator = v.union(
@@ -28,20 +27,12 @@ export const recurringValidator = v.union(
 );
 
 export default defineSchema({
-  ...authTables,
-
-  // Extend the authTables users table with app-specific fields
   users: defineTable({
-    // Fields from Convex Auth (must be included)
+    tokenIdentifier: v.string(),
     name: v.optional(v.string()),
-    image: v.optional(v.string()),
     email: v.optional(v.string()),
-    emailVerificationTime: v.optional(v.number()),
-    phone: v.optional(v.string()),
-    phoneVerificationTime: v.optional(v.number()),
-    isAnonymous: v.optional(v.boolean()),
+    image: v.optional(v.string()),
     // App-specific fields
-    passwordHash: v.optional(v.string()),
     createdAt: v.optional(v.number()),
     timezone: v.optional(v.string()),
     digestTime: v.optional(v.string()),
@@ -51,8 +42,8 @@ export default defineSchema({
     lastUsedWorkstream: v.optional(workstreamValidator),
     lastDigestSentAt: v.optional(v.number()),
   })
+    .index("by_tokenIdentifier", ["tokenIdentifier"])
     .index("email", ["email"])
-    .index("phone", ["phone"])
     .index("by_telegramChatId", ["telegramChatId"])
     .index("by_telegramLinkToken", ["telegramLinkToken"]),
 
@@ -87,6 +78,16 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_parentTaskId_and_sortOrder", ["parentTaskId", "sortOrder"]),
+
+  taskAttachments: defineTable({
+    taskId: v.id("tasks"),
+    userId: v.id("users"),
+    storageId: v.id("_storage"),
+    filename: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_taskId", ["taskId"])
+    .index("by_userId", ["userId"]),
 
   pushSubscriptions: defineTable({
     userId: v.id("users"),

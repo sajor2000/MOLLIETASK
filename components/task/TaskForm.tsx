@@ -5,11 +5,12 @@ import type { Doc } from "@/convex/_generated/dataModel";
 import type { Workstream, Priority, Recurring, TaskStatus, TaskFormData } from "@/lib/constants";
 import { WORKSTREAM_CONFIG } from "@/lib/constants";
 import { toDateInputValue, fromDateInputValue } from "@/lib/dates";
+import { TaskAttachments } from "./TaskAttachments";
 
 interface TaskFormProps {
   task?: Doc<"tasks"> | null;
   prefill?: Partial<TaskFormData>;
-  onSave: (data: TaskFormData) => void;
+  onSave: (data: TaskFormData) => void | Promise<void>;
   onDelete?: () => void;
   onClose: () => void;
   children?: React.ReactNode;
@@ -40,20 +41,22 @@ export function TaskForm({ task, prefill, onSave, onDelete, onClose, children }:
   const [notes, setNotes] = useState(task?.notes ?? prefill?.notes ?? "");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
 
-    onSave({
-      title: title.trim(),
-      workstream,
-      priority,
-      status,
-      dueDate: dueDate ? fromDateInputValue(dueDate) : undefined,
-      dueTime: dueTime || undefined,
-      recurring: dueDate ? recurring : undefined,
-      notes: notes.trim() || undefined,
-    });
+    await Promise.resolve(
+      onSave({
+        title: title.trim(),
+        workstream,
+        priority,
+        status,
+        dueDate: dueDate ? fromDateInputValue(dueDate) : undefined,
+        dueTime: dueTime || undefined,
+        recurring: dueDate ? recurring : undefined,
+        notes: notes.trim() || undefined,
+      }),
+    );
   }
 
   const workstreamKeys = Object.keys(WORKSTREAM_CONFIG) as Workstream[];
@@ -212,6 +215,17 @@ export function TaskForm({ task, prefill, onSave, onDelete, onClose, children }:
             className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 resize-none"
           />
         </div>
+
+        {task?._id ? (
+          <TaskAttachments taskId={task._id} />
+        ) : (
+          <div>
+            <label className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
+              Attachments
+            </label>
+            <p className="text-[13px] text-text-muted py-1">Save the task to add files.</p>
+          </div>
+        )}
 
         {/* Subtasks slot */}
         {children}

@@ -52,6 +52,12 @@ Never commit `.env.local` or real secrets (they are gitignored).
 
 AI assistants and contributors should read **`convex/_generated/ai/guidelines.md`** before changing Convex code (project-specific API rules).
 
+## Task file attachments
+
+Task attachments use **Convex File Storage** (`convex/taskAttachments.ts`): the client requests an upload URL from a mutation, `POST`s the file to that URL, then calls `finalizeUpload` to link the returned `storageId` to a task. Signed download URLs come from `ctx.storage.getUrl` in `listForTask`. No extra environment variables are required beyond a normal Convex deployment.
+
+Limits (enforced server-side): **10 files per task**, **255** characters for display filename, **10 MiB** max per file. Deleting a task removes its attachment rows and stored blobs.
+
 ## Build
 
 ```bash

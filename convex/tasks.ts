@@ -1,13 +1,14 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
+import type { Doc, Id } from "./_generated/dataModel";
 import {
   workstreamValidator,
   priorityValidator,
   statusValidator,
   recurringValidator,
 } from "./schema";
-import { getAuthUser, getAuthUserId } from "./authHelpers";
+import { getAuthUserId } from "./authHelpers";
 
 // ── Queries ──────────────────────────────────────────
 
@@ -77,6 +78,88 @@ export const getTask = query({
   },
 });
 
+// ── Shared helpers ──────────────────────────────────
+
+/** Complete a task: check subtasks, cancel reminder, handle recurring + clone subtasks. */
+export async function completeTaskCore(
+  ctx: MutationCtx,
+  task: Doc<"tasks">,
+  extraPatch?: Record<string, unknown>,
+): Promise<{ nextTaskId: Id<"tasks"> | null; wasRecurring: boolean }> {
+  const subtasks = await ctx.db
+    .query("subtasks")
+    .withIndex("by_parentTaskId_and_sortOrder", (q) =>
+      q.eq("parentTaskId", task._id),
+    )
+    .take(50);
+  if (subtasks.length > 0 && subtasks.some((s) => !s.isComplete)) {
+    throw new Error("All subtasks must be completed first");
+  }
+
+  if (task.scheduledReminderId) {
+    await ctx.scheduler.cancel(task.scheduledReminderId);
+  }
+
+  await ctx.db.patch(task._id, {
+    status: "done" as const,
+    completedAt: Date.now(),
+    scheduledReminderId: undefined,
+    ...extraPatch,
+  });
+
+  let nextTaskId: Id<"tasks"> | null = null;
+  if (task.recurring && task.dueDate) {
+    const nextDueDate = computeNextDueDate(task.dueDate, task.recurring);
+    nextTaskId = await ctx.db.insert("tasks", {
+      userId: task.userId,
+      title: task.title,
+      workstream: task.workstream,
+      priority: task.priority,
+      status: "todo",
+      dueDate: nextDueDate,
+      dueTime: task.dueTime,
+      recurring: task.recurring,
+      notes: task.notes,
+      sortOrder: task.sortOrder,
+      createdAt: Date.now(),
+    });
+
+    if (subtasks.length > 0) {
+      for (const subtask of subtasks) {
+        await ctx.db.insert("subtasks", {
+          parentTaskId: nextTaskId,
+          userId: task.userId,
+          title: subtask.title,
+          isComplete: false,
+          sortOrder: subtask.sortOrder,
+          createdAt: Date.now(),
+        });
+      }
+      await ctx.db.patch(nextTaskId, {
+        subtaskTotal: subtasks.length,
+        subtaskCompleted: 0,
+      });
+    }
+  }
+
+  return { nextTaskId, wasRecurring: !!(task.recurring && task.dueDate) };
+}
+
+/** Delete all attachments (records + storage blobs) for a task. */
+export async function deleteTaskAttachments(
+  ctx: MutationCtx,
+  taskId: Id<"tasks">,
+) {
+  const attachments = await ctx.db
+    .query("taskAttachments")
+    .withIndex("by_taskId", (q) => q.eq("taskId", taskId))
+    .take(50);
+  for (const att of attachments) {
+    await ctx.storage.delete(att.storageId);
+    await ctx.db.delete(att._id);
+  }
+}
+
 // ── Mutations ────────────────────────────────────────
 
 export const addTask = mutation({
@@ -93,7 +176,7 @@ export const addTask = mutation({
   },
   returns: v.id("tasks"),
   handler: async (ctx, args) => {
-    const user = await getAuthUser(ctx);
+    const userId = await getAuthUserId(ctx);
 
     if (args.title.length > 200) throw new Error("Title max 200 characters");
     if (args.notes && args.notes.length > 2000)
@@ -104,7 +187,7 @@ export const addTask = mutation({
     const existing = await ctx.db
       .query("tasks")
       .withIndex("by_userId_status_sortOrder", (q) =>
-        q.eq("userId", user._id).eq("status", args.status),
+        q.eq("userId", userId).eq("status", args.status),
       )
       .order("desc")
       .first();
@@ -113,7 +196,7 @@ export const addTask = mutation({
 
     const taskId = await ctx.db.insert("tasks", {
       ...args,
-      userId: user._id,
+      userId,
       sortOrder,
       createdAt: Date.now(),
     });
@@ -127,7 +210,7 @@ export const addTask = mutation({
       await ctx.db.patch(taskId, { scheduledReminderId: scheduledId });
     }
 
-    await ctx.db.patch(user._id, { lastUsedWorkstream: args.workstream });
+    await ctx.db.patch(userId, { lastUsedWorkstream: args.workstream });
 
     return taskId;
   },
@@ -166,16 +249,19 @@ export const updateTask = mutation({
       await ctx.scheduler.cancel(task.scheduledReminderId);
     }
 
-    await ctx.db.patch(taskId, { ...updates, reminderSent: undefined });
-
+    const patch: Record<string, unknown> = { ...updates };
+    if (updates.reminderAt !== undefined) {
+      patch.reminderSent = undefined;
+    }
     if (updates.reminderAt) {
       const scheduledId = await ctx.scheduler.runAt(
         updates.reminderAt,
         internal.reminders.sendReminder,
         { taskId },
       );
-      await ctx.db.patch(taskId, { scheduledReminderId: scheduledId });
+      patch.scheduledReminderId = scheduledId;
     }
+    await ctx.db.patch(taskId, patch);
 
     if (updates.workstream) {
       await ctx.db.patch(userId, { lastUsedWorkstream: updates.workstream });
@@ -213,6 +299,7 @@ export const deleteTask = mutation({
       await ctx.db.delete(subtask._id);
     }
 
+    await deleteTaskAttachments(ctx, taskId);
     await ctx.db.delete(taskId);
     return null;
   },
@@ -231,61 +318,8 @@ export const completeTask = mutation({
       throw new Error("Task not found");
     }
 
-    // Block completion if subtasks are incomplete
-    const subtasks = await ctx.db
-      .query("subtasks")
-      .withIndex("by_parentTaskId_and_sortOrder", (q) =>
-        q.eq("parentTaskId", taskId),
-      )
-      .take(50);
-    if (subtasks.length > 0 && subtasks.some((s) => !s.isComplete)) {
-      throw new Error("All subtasks must be completed first");
-    }
-
-    if (task.scheduledReminderId) {
-      await ctx.scheduler.cancel(task.scheduledReminderId);
-    }
-
-    await ctx.db.patch(taskId, {
-      status: "done",
-      completedAt: Date.now(),
-      scheduledReminderId: undefined,
-    });
-
-    if (task.recurring && task.dueDate) {
-      const nextDueDate = computeNextDueDate(task.dueDate, task.recurring);
-      const nextTaskId = await ctx.db.insert("tasks", {
-        userId: task.userId,
-        title: task.title,
-        workstream: task.workstream,
-        priority: task.priority,
-        status: "todo",
-        dueDate: nextDueDate,
-        dueTime: task.dueTime,
-        recurring: task.recurring,
-        notes: task.notes,
-        sortOrder: task.sortOrder,
-        createdAt: Date.now(),
-      });
-
-      // Clone subtasks to the new recurring instance (all unchecked)
-      if (subtasks.length > 0) {
-        for (const subtask of subtasks) {
-          await ctx.db.insert("subtasks", {
-            parentTaskId: nextTaskId,
-            userId: task.userId,
-            title: subtask.title,
-            isComplete: false,
-            sortOrder: subtask.sortOrder,
-            createdAt: Date.now(),
-          });
-        }
-      }
-
-      return nextTaskId;
-    }
-
-    return null;
+    const result = await completeTaskCore(ctx, task);
+    return result.nextTaskId;
   },
 });
 
@@ -327,23 +361,15 @@ export const reorderTask = mutation({
       throw new Error("Task not found");
     }
 
-    // Block drag-to-done if subtasks are incomplete
+    // Full completion flow when dragging to done (subtask guard, reminder cancel, recurring)
     if (newStatus === "done" && task.status !== "done") {
-      const subtasks = await ctx.db
-        .query("subtasks")
-        .withIndex("by_parentTaskId_and_sortOrder", (q) =>
-          q.eq("parentTaskId", taskId),
-        )
-        .take(50);
-      if (subtasks.length > 0 && subtasks.some((s) => !s.isComplete)) {
-        throw new Error("All subtasks must be completed first");
-      }
+      await completeTaskCore(ctx, task, { sortOrder: newSortOrder });
+    } else {
+      await ctx.db.patch(taskId, {
+        status: newStatus,
+        sortOrder: newSortOrder,
+      });
     }
-
-    await ctx.db.patch(taskId, {
-      status: newStatus,
-      sortOrder: newSortOrder,
-    });
 
     return null;
   },
@@ -374,6 +400,7 @@ export const deleteCompletedTasks = mutation({
       for (const subtask of subtasks) {
         await ctx.db.delete(subtask._id);
       }
+      await deleteTaskAttachments(ctx, task._id);
       await ctx.db.delete(task._id);
     }
 

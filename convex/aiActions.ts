@@ -4,7 +4,7 @@ import { v } from "convex/values";
 import { action, internalAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { getAuthUserId } from "./authHelpers";
+import { getActionUserId } from "./authHelpers";
 import {
   workstreamValidator,
   priorityValidator,
@@ -60,8 +60,8 @@ const aiTaskIntentSchema = z.discriminatedUnion("intent", [
 type TaskContextItem = {
   index: number;
   title: string;
-  workstream: string;
-  status: string;
+  workstream: "practice" | "personal" | "family";
+  status: "todo" | "inprogress" | "done";
   dueDateStr?: string;
 };
 
@@ -182,7 +182,7 @@ export const parseTaskIntent = action({
   },
   returns: intentReturnValidator,
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
+    const userId = await getActionUserId(ctx, ctx.runQuery);
 
     if (args.input.length > 500) throw new Error("Input too long");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(args.todayDate))
@@ -251,7 +251,7 @@ export const suggestSubtasks = action({
   },
   returns: v.array(v.id("subtasks")),
   handler: async (ctx, { taskId }): Promise<Id<"subtasks">[]> => {
-    const userId = await getAuthUserId(ctx);
+    const userId = await getActionUserId(ctx, ctx.runQuery);
 
     const rateCheck = await ctx.runQuery(internal.rateLimit.checkRateLimit, {
       userId,

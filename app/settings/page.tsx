@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { useAuthActions } from "@convex-dev/auth/react";
 import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import { AppShell } from "@/components/layout/AppShell";
@@ -16,7 +15,6 @@ export default function SettingsPage() {
   const generateToken = useMutation(api.users.generateTelegramLinkToken);
   const unlinkTelegram = useMutation(api.users.unlinkTelegram);
   const deleteAccount = useMutation(api.users.deleteAccount);
-  const { signOut } = useAuthActions();
   const router = useRouter();
 
   const [telegramToken, setTelegramToken] = useState<string | null>(null);
@@ -34,7 +32,7 @@ export default function SettingsPage() {
   }
 
   if (user === null) {
-    router.push("/login");
+    router.push("/sign-in");
     return null;
   }
 
@@ -76,16 +74,14 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleSignOut() {
-    await signOut();
-    router.push("/login");
+  function handleSignOut() {
+    router.push("/sign-out");
   }
 
   async function handleDeleteAccount() {
     try {
       await deleteAccount();
-      await signOut();
-      router.push("/login");
+      router.push("/sign-out");
     } catch (e) {
       console.error("Failed to delete account:", e);
     }

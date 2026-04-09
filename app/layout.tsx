@@ -1,4 +1,3 @@
-import { ConvexAuthNextjsServerProvider } from "@convex-dev/auth/nextjs/server";
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { ConvexClientProvider } from "./providers";
@@ -32,19 +31,17 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <ConvexAuthNextjsServerProvider>
-      <html lang="en" className={inter.variable}>
-        <body className="font-[family-name:var(--font-inter)] antialiased min-h-dvh">
-          <ServiceWorkerRegistrar />
-          <ConvexClientProvider>{children}</ConvexClientProvider>
-        </body>
-      </html>
-    </ConvexAuthNextjsServerProvider>
+    <html lang="en" className={inter.variable}>
+      <body className="font-[family-name:var(--font-inter)] antialiased min-h-dvh">
+        <ServiceWorkerRegistrar />
+        <ConvexClientProvider>{children}</ConvexClientProvider>
+      </body>
+    </html>
   );
 }

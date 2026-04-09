@@ -1,9 +1,10 @@
 import { v } from "convex/values";
-import { getAuthUserId as _libGetAuthUserId } from "@convex-dev/auth/server";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { workstreamValidator } from "./schema";
-import { getAuthUserId } from "./authHelpers";
+import { getAuthUserId, storeUser } from "./authHelpers";
+import { deleteTaskAttachments } from "./tasks";
+import { validateTimezone, validateDigestTime } from "./validation";
 
 export const getMe = query({
   args: {},
@@ -18,8 +19,12 @@ export const getMe = query({
     v.null(),
   ),
   handler: async (ctx) => {
-    const userId = await _libGetAuthUserId(ctx);
-    if (!userId) return null;
+    let userId;
+    try {
+      userId = await getAuthUserId(ctx);
+    } catch {
+      return null;
+    }
     const user = await ctx.db.get(userId);
     if (!user) return null;
     return {
@@ -32,7 +37,13 @@ export const getMe = query({
   },
 });
 
-const TIME_REGEX = /^\d{2}:\d{2}$/;
+export const store = mutation({
+  args: {},
+  returns: v.id("users"),
+  handler: async (ctx) => {
+    return await storeUser(ctx);
+  },
+});
 
 export const updateSettings = mutation({
   args: {
@@ -43,18 +54,8 @@ export const updateSettings = mutation({
   handler: async (ctx, updates) => {
     const userId = await getAuthUserId(ctx);
 
-    if (updates.timezone !== undefined) {
-      try {
-        Intl.DateTimeFormat(undefined, { timeZone: updates.timezone });
-      } catch {
-        throw new Error("Invalid timezone");
-      }
-    }
-    if (updates.digestTime !== undefined) {
-      if (!TIME_REGEX.test(updates.digestTime)) throw new Error("digestTime must be HH:MM");
-      const [h, m] = updates.digestTime.split(":").map(Number);
-      if (h < 0 || h > 23 || m < 0 || m > 59) throw new Error("digestTime out of range");
-    }
+    if (updates.timezone !== undefined) validateTimezone(updates.timezone);
+    if (updates.digestTime !== undefined) validateDigestTime(updates.digestTime);
 
     await ctx.db.patch(userId, updates);
     return null;
@@ -153,6 +154,7 @@ export const deleteAccount = mutation({
       for (const subtask of subtasks) {
         await ctx.db.delete(subtask._id);
       }
+      await deleteTaskAttachments(ctx, task._id);
       await ctx.db.delete(task._id);
     }
 
@@ -169,6 +171,15 @@ export const deleteAccount = mutation({
       .take(200);
     for (const sub of subs) {
       await ctx.db.delete(sub._id);
+    }
+
+    // Delete rate limit entries
+    const limits = await ctx.db
+      .query("rateLimits")
+      .withIndex("by_userId_action", (q) => q.eq("userId", userId))
+      .take(200);
+    for (const entry of limits) {
+      await ctx.db.delete(entry._id);
     }
 
     await ctx.db.delete(userId);
@@ -200,6 +211,7 @@ export const deleteAccountCleanup = internalMutation({
       for (const subtask of subtasks) {
         await ctx.db.delete(subtask._id);
       }
+      await deleteTaskAttachments(ctx, task._id);
       await ctx.db.delete(task._id);
     }
 
@@ -214,6 +226,15 @@ export const deleteAccountCleanup = internalMutation({
       .take(200);
     for (const sub of subs) {
       await ctx.db.delete(sub._id);
+    }
+
+    // Delete rate limit entries
+    const limits = await ctx.db
+      .query("rateLimits")
+      .withIndex("by_userId_action", (q) => q.eq("userId", userId))
+      .take(200);
+    for (const entry of limits) {
+      await ctx.db.delete(entry._id);
     }
 
     await ctx.db.delete(userId);

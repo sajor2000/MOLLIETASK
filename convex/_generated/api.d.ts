@@ -8,10 +8,9 @@
  * @module
  */
 
-import type * as ResendOTPPasswordReset from "../ResendOTPPasswordReset.js";
 import type * as aiActions from "../aiActions.js";
-import type * as auth from "../auth.js";
 import type * as authHelpers from "../authHelpers.js";
+import type * as authInternal from "../authInternal.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as pushActions from "../pushActions.js";
@@ -19,11 +18,13 @@ import type * as pushNotifications from "../pushNotifications.js";
 import type * as rateLimit from "../rateLimit.js";
 import type * as reminders from "../reminders.js";
 import type * as subtasks from "../subtasks.js";
+import type * as taskAttachments from "../taskAttachments.js";
 import type * as tasks from "../tasks.js";
 import type * as telegram from "../telegram.js";
 import type * as telegramBot from "../telegramBot.js";
 import type * as telegramFormat from "../telegramFormat.js";
 import type * as users from "../users.js";
+import type * as validation from "../validation.js";
 
 import type {
   ApiFromModules,
@@ -32,10 +33,9 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  ResendOTPPasswordReset: typeof ResendOTPPasswordReset;
   aiActions: typeof aiActions;
-  auth: typeof auth;
   authHelpers: typeof authHelpers;
+  authInternal: typeof authInternal;
   crons: typeof crons;
   http: typeof http;
   pushActions: typeof pushActions;
@@ -43,11 +43,13 @@ declare const fullApi: ApiFromModules<{
   rateLimit: typeof rateLimit;
   reminders: typeof reminders;
   subtasks: typeof subtasks;
+  taskAttachments: typeof taskAttachments;
   tasks: typeof tasks;
   telegram: typeof telegram;
   telegramBot: typeof telegramBot;
   telegramFormat: typeof telegramFormat;
   users: typeof users;
+  validation: typeof validation;
 }>;
 
 /**

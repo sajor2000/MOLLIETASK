@@ -7,7 +7,9 @@ import {
   statusValidator,
   recurringValidator,
 } from "./schema";
-import { computeNextDueDate } from "./tasks";
+import { completeTaskCore, deleteTaskAttachments } from "./tasks";
+import { updateParentCounts } from "./subtasks";
+import { validateTimezone, validateDigestTime } from "./validation";
 
 // ── Queries ─────────────────────────────────────────
 
@@ -131,6 +133,7 @@ export const editTaskFromTelegram = internalMutation({
     dueDate: v.optional(v.number()),
     dueTime: v.optional(v.string()),
     notes: v.optional(v.string()),
+    recurring: v.optional(recurringValidator),
   },
   returns: v.union(
     v.object({ success: v.literal(false) }),
@@ -161,12 +164,18 @@ export const editTaskFromTelegram = internalMutation({
     }
     if (updates.dueTime !== undefined) changes.push(`time → ${updates.dueTime}`);
     if (updates.notes !== undefined) changes.push("notes updated");
+    if (updates.recurring !== undefined) changes.push(`recurring → ${updates.recurring}`);
 
-    // Filter out undefined values before patching
-    const patch: Record<string, unknown> = {};
-    for (const [k, val] of Object.entries(updates)) {
-      if (val !== undefined) patch[k] = val;
-    }
+    // Build typed patch from defined fields
+    const patch = {
+      ...(updates.title !== undefined && { title: updates.title }),
+      ...(updates.workstream !== undefined && { workstream: updates.workstream }),
+      ...(updates.priority !== undefined && { priority: updates.priority }),
+      ...(updates.dueDate !== undefined && { dueDate: updates.dueDate }),
+      ...(updates.dueTime !== undefined && { dueTime: updates.dueTime }),
+      ...(updates.notes !== undefined && { notes: updates.notes }),
+      ...(updates.recurring !== undefined && { recurring: updates.recurring }),
+    };
 
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch(taskId, patch);
@@ -206,40 +215,13 @@ export const completeTaskFromTelegram = internalMutation({
       return { success: false as const };
     }
 
-    if (task.scheduledReminderId) {
-      await ctx.scheduler.cancel(task.scheduledReminderId);
-    }
-
-    await ctx.db.patch(taskId, {
-      status: "done",
-      completedAt: Date.now(),
-      scheduledReminderId: undefined,
-    });
-
-    let wasRecurring = false;
-    if (task.recurring && task.dueDate) {
-      wasRecurring = true;
-      const nextDueDate = computeNextDueDate(task.dueDate, task.recurring);
-      await ctx.db.insert("tasks", {
-        userId: task.userId,
-        title: task.title,
-        workstream: task.workstream,
-        priority: task.priority,
-        status: "todo",
-        dueDate: nextDueDate,
-        dueTime: task.dueTime,
-        recurring: task.recurring,
-        notes: task.notes,
-        sortOrder: task.sortOrder,
-        createdAt: Date.now(),
-      });
-    }
+    const result = await completeTaskCore(ctx, task);
 
     return {
       success: true as const,
       title: task.title,
       workstream: task.workstream,
-      wasRecurring,
+      wasRecurring: result.wasRecurring,
     };
   },
 });
@@ -288,6 +270,146 @@ export const snoozeTask = internalMutation({
   },
 });
 
+export const deleteTaskFromTelegram = internalMutation({
+  args: {
+    userId: v.id("users"),
+    taskId: v.id("tasks"),
+  },
+  returns: v.union(
+    v.object({ success: v.literal(false) }),
+    v.object({
+      success: v.literal(true),
+      title: v.string(),
+      workstream: workstreamValidator,
+    }),
+  ),
+  handler: async (ctx, { userId, taskId }) => {
+    const task = await ctx.db.get(taskId);
+    if (!task || task.userId !== userId) {
+      return { success: false as const };
+    }
+
+    if (task.scheduledReminderId) {
+      await ctx.scheduler.cancel(task.scheduledReminderId);
+    }
+
+    // Cascade-delete subtasks
+    const subtasks = await ctx.db
+      .query("subtasks")
+      .withIndex("by_parentTaskId_and_sortOrder", (q) =>
+        q.eq("parentTaskId", taskId),
+      )
+      .take(50);
+    for (const sub of subtasks) {
+      await ctx.db.delete(sub._id);
+    }
+
+    await deleteTaskAttachments(ctx, taskId);
+    const { title, workstream } = task;
+    await ctx.db.delete(taskId);
+
+    return { success: true as const, title, workstream };
+  },
+});
+
+// ── Subtask operations ─────────────────────────────
+
+export const getSubtasksForTelegram = internalQuery({
+  args: {
+    userId: v.id("users"),
+    taskId: v.id("tasks"),
+  },
+  returns: v.array(
+    v.object({
+      _id: v.id("subtasks"),
+      title: v.string(),
+      isComplete: v.boolean(),
+      sortOrder: v.number(),
+    }),
+  ),
+  handler: async (ctx, { userId, taskId }) => {
+    const task = await ctx.db.get(taskId);
+    if (!task || task.userId !== userId) return [];
+    const subtasks = await ctx.db
+      .query("subtasks")
+      .withIndex("by_parentTaskId_and_sortOrder", (q) =>
+        q.eq("parentTaskId", taskId),
+      )
+      .take(50);
+    return subtasks.map((s) => ({
+      _id: s._id,
+      title: s.title,
+      isComplete: s.isComplete,
+      sortOrder: s.sortOrder,
+    }));
+  },
+});
+
+export const addSubtaskFromTelegram = internalMutation({
+  args: {
+    userId: v.id("users"),
+    taskId: v.id("tasks"),
+    title: v.string(),
+  },
+  returns: v.union(
+    v.object({ success: v.literal(false) }),
+    v.object({ success: v.literal(true), title: v.string() }),
+  ),
+  handler: async (ctx, { userId, taskId, title }) => {
+    const task = await ctx.db.get(taskId);
+    if (!task || task.userId !== userId) return { success: false as const };
+
+    if (title.length > 200) throw new Error("Subtask title max 200 characters");
+
+    const existing = await ctx.db
+      .query("subtasks")
+      .withIndex("by_parentTaskId_and_sortOrder", (q) =>
+        q.eq("parentTaskId", taskId),
+      )
+      .take(21);
+
+    if (existing.length >= 20) throw new Error("Maximum 20 subtasks per task");
+
+    const last = existing[existing.length - 1];
+    const sortOrder = last ? last.sortOrder + 1000 : 1000;
+
+    await ctx.db.insert("subtasks", {
+      parentTaskId: taskId,
+      userId,
+      title: title.trim(),
+      isComplete: false,
+      sortOrder,
+      createdAt: Date.now(),
+    });
+
+    await updateParentCounts(ctx, taskId);
+    return { success: true as const, title: title.trim() };
+  },
+});
+
+export const toggleSubtaskFromTelegram = internalMutation({
+  args: {
+    userId: v.id("users"),
+    subtaskId: v.id("subtasks"),
+  },
+  returns: v.union(
+    v.object({ success: v.literal(false) }),
+    v.object({ success: v.literal(true), title: v.string(), isComplete: v.boolean() }),
+  ),
+  handler: async (ctx, { userId, subtaskId }) => {
+    const subtask = await ctx.db.get(subtaskId);
+    if (!subtask || subtask.userId !== userId) return { success: false as const };
+
+    const newState = !subtask.isComplete;
+    await ctx.db.patch(subtaskId, { isComplete: newState });
+    await updateParentCounts(ctx, subtask.parentTaskId);
+
+    return { success: true as const, title: subtask.title, isComplete: newState };
+  },
+});
+
+// ── Settings ──────────────────────────────────────
+
 export const updateSettingsFromTelegram = internalMutation({
   args: {
     userId: v.id("users"),
@@ -296,22 +418,13 @@ export const updateSettingsFromTelegram = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, { userId, timezone, digestTime }) => {
-    if (timezone !== undefined) {
-      try {
-        Intl.DateTimeFormat(undefined, { timeZone: timezone });
-      } catch {
-        throw new Error("Invalid timezone");
-      }
-    }
-    if (digestTime !== undefined && digestTime !== "") {
-      if (!/^\d{2}:\d{2}$/.test(digestTime)) throw new Error("digestTime must be HH:MM");
-      const [h, m] = digestTime.split(":").map(Number);
-      if (h < 0 || h > 23 || m < 0 || m > 59) throw new Error("digestTime out of range");
-    }
+    if (timezone !== undefined) validateTimezone(timezone);
+    if (digestTime !== undefined && digestTime !== "") validateDigestTime(digestTime);
 
-    const patch: Record<string, unknown> = {};
-    if (timezone !== undefined) patch.timezone = timezone;
-    if (digestTime !== undefined) patch.digestTime = digestTime || undefined;
+    const patch = {
+      ...(timezone !== undefined && { timezone }),
+      ...(digestTime !== undefined && { digestTime: digestTime || undefined }),
+    };
 
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch(userId, patch);

@@ -10,7 +10,7 @@ import type { TaskFormData } from "@/lib/constants";
 interface TaskDetailViewProps {
   task?: Doc<"tasks"> | null;
   prefill?: Partial<TaskFormData>;
-  onSave: (data: TaskFormData) => void;
+  onSave: (data: TaskFormData) => void | Promise<void>;
   onDelete?: () => void;
   onClose: () => void;
 }

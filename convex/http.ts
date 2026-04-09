@@ -2,7 +2,6 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { auth } from "./auth";
 import {
   formatTaskList,
   formatTaskConfirmation,
@@ -12,6 +11,15 @@ import {
 } from "./telegramFormat";
 
 const SNOOZE_DURATION_MS = 60 * 60 * 1000; // 1 hour — matches "Snooze 1hr" button label
+
+const TZ_SHORTCUTS: Record<string, string> = {
+  eastern: "America/New_York",
+  central: "America/Chicago",
+  mountain: "America/Denver",
+  pacific: "America/Los_Angeles",
+  alaska: "America/Anchorage",
+  hawaii: "Pacific/Honolulu",
+};
 
 // ── Helpers ─────────────────────────────────────────
 
@@ -39,12 +47,41 @@ function parseAddCommand(text: string): {
   return { title: titleWords.join(" "), workstream, priority };
 }
 
+// Build the AI-compatible task context array from Telegram task query results
+function buildTaskContext(tasks: Array<{ title: string; workstream: string; status: string; dueDate?: number }>) {
+  return tasks.map((t, i) => ({
+    index: i,
+    title: t.title,
+    workstream: t.workstream as "practice" | "personal" | "family",
+    status: t.status as "todo" | "inprogress" | "done",
+    ...(t.dueDate ? { dueDateStr: new Date(t.dueDate).toISOString().slice(0, 10) } : {}),
+  }));
+}
+
+// Build a typed edit patch from AI-parsed fields
+function buildEditPatch(fields: {
+  title?: string | null;
+  workstream?: "practice" | "personal" | "family" | null;
+  priority?: "high" | "normal" | null;
+  dueDate?: string | null;
+  dueTime?: string | null;
+  notes?: string | null;
+  recurring?: "daily" | "weekdays" | "weekly" | "monthly" | null;
+}) {
+  return {
+    ...(fields.title ? { title: fields.title } : {}),
+    ...(fields.workstream ? { workstream: fields.workstream } : {}),
+    ...(fields.priority ? { priority: fields.priority } : {}),
+    ...(fields.dueDate ? { dueDate: new Date(fields.dueDate).getTime() } : {}),
+    ...(fields.dueTime ? { dueTime: fields.dueTime } : {}),
+    ...(fields.notes ? { notes: fields.notes } : {}),
+    ...(fields.recurring ? { recurring: fields.recurring } : {}),
+  };
+}
+
 // ── HTTP Router ─────────────────────────────────────
 
 const http = httpRouter();
-
-// Convex Auth routes
-auth.addHttpRoutes(http);
 
 // Telegram webhook — handles text commands and callback queries
 http.route({
@@ -79,7 +116,9 @@ http.route({
         ? await ctx.runQuery(internal.telegramBot.getUserByChatId, { chatId })
         : null;
 
-      if (data.startsWith("done:") && user) {
+      if (!user) {
+        console.warn("Callback query from unlinked chat:", { chatId, data });
+      } else if (data.startsWith("done:")) {
         const taskId = data.slice(5) as Id<"tasks">;
         try {
           const result = await ctx.runMutation(
@@ -94,7 +133,7 @@ http.route({
         } catch (e) {
           console.error("Failed to complete task from callback:", { taskId, chatId, error: e });
         }
-      } else if (data.startsWith("snooze:") && user) {
+      } else if (data.startsWith("snooze:")) {
         const taskId = data.slice(7) as Id<"tasks">;
         try {
           const result = await ctx.runMutation(internal.telegramBot.snoozeTask, {
@@ -103,7 +142,7 @@ http.route({
             durationMs: SNOOZE_DURATION_MS,
           });
           if (result.success) {
-            await reply(chatId, formatSnoozeConfirmation(result.title, result.newReminderAt));
+            await reply(chatId, formatSnoozeConfirmation(result.title, result.newReminderAt, user.timezone));
           }
         } catch (e) {
           console.error("Failed to snooze task from callback:", { taskId, chatId, error: e });
@@ -159,22 +198,72 @@ http.route({
       return new Response("OK", { status: 200 });
     }
 
-    // /add {title} [@workstream] [!high]
+    // /add {text} — parse via AI for full field support (dates, times, recurring)
     if (text.startsWith("/add ")) {
-      const parsed = parseAddCommand(text.slice(5).trim());
-      if (!parsed.title) {
-        await reply(chatId, "Usage: /add Buy supplies @practice !high");
+      const rawInput = text.slice(5).trim();
+      if (!rawInput) {
+        await reply(chatId, "Usage: /add Buy supplies tomorrow @practice !high");
         return new Response("OK", { status: 200 });
       }
-      const workstream = parsed.workstream ?? user.lastUsedWorkstream ?? "personal";
-      const priority = parsed.priority ?? "normal";
-      await ctx.runMutation(internal.telegramBot.addTaskFromTelegram, {
-        userId: user._id,
-        title: parsed.title,
-        workstream,
-        priority,
-      });
-      await reply(chatId, formatTaskConfirmation("added", parsed.title, workstream));
+
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const aiResult = await ctx.runAction(internal.aiActions.parseTaskIntentInternal, {
+          userId: user._id,
+          input: rawInput,
+          taskContext: [],
+          todayDate: today,
+        });
+
+        if (aiResult.fields) {
+          const workstream = aiResult.fields.workstream ?? user.lastUsedWorkstream ?? "personal";
+          const priority = aiResult.fields.priority ?? "normal";
+          const title = (aiResult.fields.title ?? rawInput).slice(0, 200);
+
+          await ctx.runMutation(internal.telegramBot.addTaskFromTelegram, {
+            userId: user._id,
+            title,
+            workstream,
+            priority,
+            ...(aiResult.fields.dueDate ? { dueDate: new Date(aiResult.fields.dueDate).getTime() } : {}),
+            ...(aiResult.fields.dueTime ? { dueTime: aiResult.fields.dueTime } : {}),
+            ...(aiResult.fields.notes ? { notes: aiResult.fields.notes } : {}),
+            ...(aiResult.fields.recurring ? { recurring: aiResult.fields.recurring } : {}),
+          });
+          await reply(chatId, formatTaskConfirmation("added", title, workstream));
+        } else {
+          // AI returned no fields — fall back to simple parse
+          const parsed = parseAddCommand(rawInput);
+          const workstream = parsed.workstream ?? user.lastUsedWorkstream ?? "personal";
+          const priority = parsed.priority ?? "normal";
+          const title = parsed.title || rawInput;
+          await ctx.runMutation(internal.telegramBot.addTaskFromTelegram, {
+            userId: user._id,
+            title,
+            workstream,
+            priority,
+          });
+          await reply(chatId, formatTaskConfirmation("added", title, workstream));
+        }
+      } catch (e: unknown) {
+        // AI failure — fall back to simple parse
+        const msg = e instanceof Error ? e.message : "";
+        if (msg.includes("Rate limited")) {
+          await reply(chatId, msg);
+        } else {
+          const parsed = parseAddCommand(rawInput);
+          const workstream = parsed.workstream ?? user.lastUsedWorkstream ?? "personal";
+          const priority = parsed.priority ?? "normal";
+          const title = parsed.title || rawInput;
+          await ctx.runMutation(internal.telegramBot.addTaskFromTelegram, {
+            userId: user._id,
+            title,
+            workstream,
+            priority,
+          });
+          await reply(chatId, formatTaskConfirmation("added", title, workstream));
+        }
+      }
       return new Response("OK", { status: 200 });
     }
 
@@ -183,7 +272,7 @@ http.route({
       const tasks = await ctx.runQuery(internal.telegramBot.getTasksForTelegram, {
         userId: user._id,
       });
-      await reply(chatId, formatTaskList(tasks));
+      await reply(chatId, formatTaskList(tasks, user.timezone));
       return new Response("OK", { status: 200 });
     }
 
@@ -252,36 +341,18 @@ http.route({
 
       try {
         const today = new Date().toISOString().slice(0, 10);
-        const taskContext = tasks.map((t: (typeof tasks)[number], i: number) => ({
-          index: i,
-          title: t.title,
-          workstream: t.workstream,
-          status: t.status,
-          ...(t.dueDate ? { dueDateStr: new Date(t.dueDate).toISOString().slice(0, 10) } : {}),
-        }));
-
         const aiResult = await ctx.runAction(internal.aiActions.parseTaskIntentInternal, {
           userId: user._id,
           input: `edit task ${taskNum}: ${changeText}`,
-          taskContext,
+          taskContext: buildTaskContext(tasks),
           todayDate: today,
         });
 
         if (aiResult.intent === "edit" && aiResult.fields) {
-          const updates: Record<string, unknown> = {};
-          if (aiResult.fields.title) updates.title = aiResult.fields.title;
-          if (aiResult.fields.workstream) updates.workstream = aiResult.fields.workstream;
-          if (aiResult.fields.priority) updates.priority = aiResult.fields.priority;
-          if (aiResult.fields.dueDate) {
-            updates.dueDate = new Date(aiResult.fields.dueDate).getTime();
-          }
-          if (aiResult.fields.dueTime) updates.dueTime = aiResult.fields.dueTime;
-          if (aiResult.fields.notes) updates.notes = aiResult.fields.notes;
-
           const result = await ctx.runMutation(internal.telegramBot.editTaskFromTelegram, {
             userId: user._id,
             taskId: targetTask._id as Id<"tasks">,
-            ...updates,
+            ...buildEditPatch(aiResult.fields),
           });
 
           if (result.success) {
@@ -312,14 +383,6 @@ http.route({
         return new Response("OK", { status: 200 });
       }
 
-      const TZ_SHORTCUTS: Record<string, string> = {
-        eastern: "America/New_York",
-        central: "America/Chicago",
-        mountain: "America/Denver",
-        pacific: "America/Los_Angeles",
-        alaska: "America/Anchorage",
-        hawaii: "Pacific/Honolulu",
-      };
       const resolved = TZ_SHORTCUTS[arg.toLowerCase()] ?? arg;
 
       try {
@@ -364,6 +427,210 @@ http.route({
       return new Response("OK", { status: 200 });
     }
 
+    // /subtasks {number} — list subtasks for a task
+    if (text.startsWith("/subtasks ")) {
+      const num = parseInt(text.slice(10).trim(), 10);
+      const tasks = await ctx.runQuery(internal.telegramBot.getTasksForTelegram, {
+        userId: user._id,
+      });
+
+      if (isNaN(num) || num < 1 || num > tasks.length) {
+        await reply(chatId, `Task #${num} not found. Use /tasks to see your list.`);
+        return new Response("OK", { status: 200 });
+      }
+
+      const target = tasks[num - 1];
+      const subtasks = await ctx.runQuery(internal.telegramBot.getSubtasksForTelegram, {
+        userId: user._id,
+        taskId: target._id,
+      });
+
+      if (subtasks.length === 0) {
+        await reply(chatId, `"${target.title}" has no subtasks.\nAdd one: /addsub ${num} <title>`);
+        return new Response("OK", { status: 200 });
+      }
+
+      const done = subtasks.filter((s: (typeof subtasks)[number]) => s.isComplete).length;
+      const lines = [`\u{1F4CB} "${target.title}" (${done}/${subtasks.length} done):`];
+      subtasks.forEach((s: (typeof subtasks)[number], i: number) => {
+        const check = s.isComplete ? "\u2705" : "\u2B1C";
+        lines.push(`  ${i + 1}. ${check} ${s.title}`);
+      });
+      lines.push(`\nToggle: /donesub ${num}.<subNum>`);
+      await reply(chatId, lines.join("\n"));
+      return new Response("OK", { status: 200 });
+    }
+
+    // /addsub {taskNum} {title} — add a subtask
+    if (text.startsWith("/addsub ")) {
+      const arg = text.slice(8).trim();
+      const match = arg.match(/^(\d+)\s+(.+)$/);
+      if (!match) {
+        await reply(chatId, "Usage: /addsub 3 Order supplies");
+        return new Response("OK", { status: 200 });
+      }
+
+      const taskNum = parseInt(match[1], 10);
+      const subTitle = match[2].trim();
+
+      const tasks = await ctx.runQuery(internal.telegramBot.getTasksForTelegram, {
+        userId: user._id,
+      });
+
+      if (taskNum < 1 || taskNum > tasks.length) {
+        await reply(chatId, `Task #${taskNum} not found. Use /tasks to see your list.`);
+        return new Response("OK", { status: 200 });
+      }
+
+      try {
+        const result = await ctx.runMutation(internal.telegramBot.addSubtaskFromTelegram, {
+          userId: user._id,
+          taskId: tasks[taskNum - 1]._id,
+          title: subTitle.slice(0, 200),
+        });
+        if (result.success) {
+          await reply(chatId, `\u2795 Added subtask to "${tasks[taskNum - 1].title}": ${result.title}`);
+        } else {
+          await reply(chatId, "Could not add subtask.");
+        }
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Failed to add subtask";
+        await reply(chatId, msg);
+      }
+      return new Response("OK", { status: 200 });
+    }
+
+    // /donesub {taskNum}.{subNum} — toggle a subtask
+    if (text.startsWith("/donesub ")) {
+      const arg = text.slice(9).trim();
+      const match = arg.match(/^(\d+)\.(\d+)$/);
+      if (!match) {
+        await reply(chatId, "Usage: /donesub 3.1 (task #3, subtask #1)");
+        return new Response("OK", { status: 200 });
+      }
+
+      const taskNum = parseInt(match[1], 10);
+      const subNum = parseInt(match[2], 10);
+
+      const tasks = await ctx.runQuery(internal.telegramBot.getTasksForTelegram, {
+        userId: user._id,
+      });
+
+      if (taskNum < 1 || taskNum > tasks.length) {
+        await reply(chatId, `Task #${taskNum} not found. Use /tasks to see your list.`);
+        return new Response("OK", { status: 200 });
+      }
+
+      const subtasks = await ctx.runQuery(internal.telegramBot.getSubtasksForTelegram, {
+        userId: user._id,
+        taskId: tasks[taskNum - 1]._id,
+      });
+
+      if (subNum < 1 || subNum > subtasks.length) {
+        await reply(chatId, `Subtask #${subNum} not found. Use /subtasks ${taskNum} to see the list.`);
+        return new Response("OK", { status: 200 });
+      }
+
+      const result = await ctx.runMutation(internal.telegramBot.toggleSubtaskFromTelegram, {
+        userId: user._id,
+        subtaskId: subtasks[subNum - 1]._id,
+      });
+
+      if (result.success) {
+        const emoji = result.isComplete ? "\u2705" : "\u2B1C";
+        await reply(chatId, `${emoji} ${result.title}`);
+      } else {
+        await reply(chatId, "Could not toggle subtask.");
+      }
+      return new Response("OK", { status: 200 });
+    }
+
+    // /delete {number|text} — delete a task
+    if (text.startsWith("/delete ")) {
+      const arg = text.slice(8).trim();
+      if (!arg) {
+        await reply(chatId, "Usage: /delete 3 or /delete Buy supplies");
+        return new Response("OK", { status: 200 });
+      }
+
+      const tasks = await ctx.runQuery(internal.telegramBot.getTasksForTelegram, {
+        userId: user._id,
+      });
+
+      let taskToDelete: (typeof tasks)[number] | undefined;
+      const num = parseInt(arg, 10);
+      if (!isNaN(num) && num >= 1 && num <= tasks.length) {
+        taskToDelete = tasks[num - 1];
+      } else {
+        const lower = arg.toLowerCase();
+        taskToDelete = tasks.find((t: (typeof tasks)[number]) => t.title.toLowerCase().includes(lower));
+      }
+
+      if (!taskToDelete) {
+        await reply(chatId, `No matching task found for "${arg}". Use /tasks to see your list.`);
+        return new Response("OK", { status: 200 });
+      }
+
+      const result = await ctx.runMutation(
+        internal.telegramBot.deleteTaskFromTelegram,
+        { userId: user._id, taskId: taskToDelete._id },
+      );
+      if (result.success) {
+        await reply(chatId, formatTaskConfirmation("deleted", result.title, result.workstream));
+      } else {
+        await reply(chatId, "Could not delete that task.");
+      }
+      return new Response("OK", { status: 200 });
+    }
+
+    // /today — show tasks due today
+    if (text === "/today") {
+      const tz = user.timezone ?? "America/Chicago";
+      const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: tz }); // YYYY-MM-DD
+
+      const tasks = await ctx.runQuery(internal.telegramBot.getTasksForTelegram, {
+        userId: user._id,
+      });
+
+      const todayTasks = tasks.filter((t: (typeof tasks)[number]) => {
+        if (!t.dueDate) return false;
+        const taskDateStr = new Date(t.dueDate).toLocaleDateString("en-CA", { timeZone: tz });
+        return taskDateStr === todayStr;
+      });
+
+      const overdue = tasks.filter((t: (typeof tasks)[number]) => {
+        if (!t.dueDate) return false;
+        const taskDateStr = new Date(t.dueDate).toLocaleDateString("en-CA", { timeZone: tz });
+        return taskDateStr < todayStr;
+      });
+
+      const lines: string[] = [];
+      if (overdue.length > 0) {
+        lines.push(`\u{1F534} Overdue (${overdue.length})`);
+        overdue.forEach((t: (typeof overdue)[number], i: number) => {
+          const pri = t.priority === "high" ? "[!] " : "";
+          lines.push(`  ${i + 1}. ${pri}${t.title}`);
+        });
+        lines.push("");
+      }
+
+      if (todayTasks.length > 0) {
+        lines.push(`\u{1F4C5} Today (${todayTasks.length})`);
+        todayTasks.forEach((t: (typeof todayTasks)[number], i: number) => {
+          const pri = t.priority === "high" ? "[!] " : "";
+          const time = t.dueTime ? ` \u00b7 ${t.dueTime}` : "";
+          lines.push(`  ${i + 1}. ${pri}${t.title}${time}`);
+        });
+      }
+
+      if (lines.length === 0) {
+        await reply(chatId, "Nothing due today. Nice work!");
+      } else {
+        await reply(chatId, lines.join("\n"));
+      }
+      return new Response("OK", { status: 200 });
+    }
+
     // /help
     if (text === "/help") {
       await reply(chatId, HELP_TEXT);
@@ -382,18 +649,11 @@ http.route({
       const tasks = await ctx.runQuery(internal.telegramBot.getTasksForTelegram, {
         userId: user._id,
       });
-      const taskContext = tasks.map((t: (typeof tasks)[number], i: number) => ({
-        index: i,
-        title: t.title,
-        workstream: t.workstream,
-        status: t.status,
-        ...(t.dueDate ? { dueDateStr: new Date(t.dueDate).toISOString().slice(0, 10) } : {}),
-      }));
 
       const aiResult = await ctx.runAction(internal.aiActions.parseTaskIntentInternal, {
         userId: user._id,
         input: text,
-        taskContext,
+        taskContext: buildTaskContext(tasks),
         todayDate: today,
       });
 
@@ -433,20 +693,10 @@ http.route({
       } else if (aiResult.intent === "edit" && aiResult.taskIndex !== undefined && aiResult.fields) {
         const target = tasks[aiResult.taskIndex];
         if (target) {
-          const updates: Record<string, unknown> = {};
-          if (aiResult.fields.title) updates.title = aiResult.fields.title;
-          if (aiResult.fields.workstream) updates.workstream = aiResult.fields.workstream;
-          if (aiResult.fields.priority) updates.priority = aiResult.fields.priority;
-          if (aiResult.fields.dueDate) {
-            updates.dueDate = new Date(aiResult.fields.dueDate).getTime();
-          }
-          if (aiResult.fields.dueTime) updates.dueTime = aiResult.fields.dueTime;
-          if (aiResult.fields.notes) updates.notes = aiResult.fields.notes;
-
           const result = await ctx.runMutation(internal.telegramBot.editTaskFromTelegram, {
             userId: user._id,
             taskId: target._id as Id<"tasks">,
-            ...updates,
+            ...buildEditPatch(aiResult.fields),
           });
           if (result.success) {
             await reply(chatId, formatEditConfirmation(result.title, result.changes));

@@ -1,5 +1,10 @@
 import type { NextConfig } from "next";
 
+// 'unsafe-inline' is required for script-src and style-src because Next.js App
+// Router injects inline scripts for hydration and page transitions. The proper
+// upgrade path is CSP nonces via middleware (next-safe), but that adds complexity
+// with no current XSS vector (all dynamic content is rendered via React/Convex
+// which auto-escapes output). Revisit when Next.js nonce support matures.
 const cspHeader = `
   default-src 'self';
   script-src 'self' 'unsafe-inline';

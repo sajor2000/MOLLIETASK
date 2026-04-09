@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
@@ -11,7 +11,6 @@ import { WORKSTREAM_CONFIG } from "@/lib/constants";
 import type { TaskFormData } from "@/lib/constants";
 import { toCSTDateString, fromDateInputValue } from "@/lib/dates";
 import { useTaskActions } from "@/hooks/useTaskActions";
-import { useState } from "react";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = [
@@ -36,18 +35,25 @@ export default function CalendarPage() {
 
   const todayStr = toCSTDateString(Date.now());
 
-  // Group non-done tasks by CST date string
+  // Group non-done tasks by CST date string, scoped to the visible month range
   const tasksByDate = useMemo(() => {
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth();
+    // Visible range: up to 6 days before month start and 6 after month end
+    const rangeStart = new Date(year, month, -6).getTime();
+    const rangeEnd = new Date(year, month + 1, 7).getTime();
+
     const map = new Map<string, Doc<"tasks">[]>();
     for (const t of tasks ?? []) {
       if (t.status === "done" || !t.dueDate) continue;
+      if (t.dueDate < rangeStart || t.dueDate > rangeEnd) continue;
       const dateStr = toCSTDateString(t.dueDate);
       const list = map.get(dateStr) ?? [];
       list.push(t);
       map.set(dateStr, list);
     }
     return map;
-  }, [tasks]);
+  }, [tasks, viewDate]);
 
   // Calendar grid for current month
   const calendarDays = useMemo(() => {

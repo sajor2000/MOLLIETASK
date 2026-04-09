@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { useMutation } from "convex/react";
+import { useConvex, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import type { TaskFormData } from "@/lib/constants";
 
 export function useTaskActions() {
+  const convex = useConvex();
   const addTask = useMutation(api.tasks.addTask);
   const updateTask = useMutation(api.tasks.updateTask);
   const deleteTask = useMutation(api.tasks.deleteTask);
@@ -16,16 +17,31 @@ export function useTaskActions() {
   const [isCreating, setIsCreating] = useState(false);
 
   const handleSave = useCallback(
-    (data: TaskFormData) => {
+    async (data: TaskFormData) => {
       if (editingTask) {
-        updateTask({ taskId: editingTask._id, ...data }).catch(console.error);
-        setEditingTask(null);
+        try {
+          await updateTask({ taskId: editingTask._id, ...data });
+          setEditingTask(null);
+        } catch {
+          console.error("Failed to update task");
+        }
       } else {
-        addTask(data).catch(console.error);
-        setIsCreating(false);
+        try {
+          const taskId = await addTask(data);
+          const doc = await convex.query(api.tasks.getTask, { taskId });
+          if (doc) {
+            setEditingTask(doc);
+            setIsCreating(false);
+          } else {
+            setIsCreating(false);
+          }
+        } catch {
+          console.error("Failed to add task");
+          setIsCreating(false);
+        }
       }
     },
-    [editingTask, updateTask, addTask],
+    [editingTask, updateTask, addTask, convex],
   );
 
   const handleDelete = useCallback(

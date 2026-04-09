@@ -26,7 +26,7 @@ export const savePushSubscription = mutation({
     const existing = await ctx.db
       .query("pushSubscriptions")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .take(6);
+      .take(5);
     if (existing.length >= 5) {
       throw new Error("Maximum of 5 push subscriptions per account");
     }

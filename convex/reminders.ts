@@ -267,12 +267,13 @@ export const checkDigest = internalAction({
 
     if (Math.abs(nowMinutes - digestMinutes) > 15) return null;
 
-    // Build today's start/end in user timezone using parsed parts
-    const userYear = get("year");
-    const userMonth = get("month");
-    const userDay = get("day");
-    const todayStart = new Date(`${userYear}-${String(userMonth).padStart(2, "0")}-${String(userDay).padStart(2, "0")}T00:00:00`);
-    const todayEnd = new Date(`${userYear}-${String(userMonth).padStart(2, "0")}-${String(userDay).padStart(2, "0")}T23:59:59.999`);
+    // Compute today's start/end as UTC timestamps corresponding to midnight in user's tz.
+    // Elapsed local time since midnight = hours*3600 + minutes*60 + seconds (in ms).
+    // Since seconds/ms are timezone-invariant, we can derive midnight UTC from `now`.
+    const nowSecond = now.getUTCSeconds();
+    const elapsedMs = (nowHour * 3600 + nowMinute * 60 + nowSecond) * 1000 + now.getMilliseconds();
+    const todayStart = new Date(now.getTime() - elapsedMs);
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
 
     const counts = await ctx.runQuery(internal.reminders.getDigestCounts, {
       userId: user._id,
