@@ -1,5 +1,7 @@
 import type { IconName } from "@/components/ui/Icon";
 
+export const DEFAULT_TIMEZONE = "America/Chicago";
+
 export type Workstream = "practice" | "personal" | "family";
 export type TaskStatus = "todo" | "inprogress" | "done";
 export type Priority = "high" | "normal";
@@ -40,4 +42,15 @@ export const STATUS_CONFIG: Record<
   done: { label: "Done", bgClass: "bg-success/15", textClass: "text-success" },
 };
 
-export const COLUMN_ORDER: TaskStatus[] = ["todo", "inprogress", "done"];
+export const COLUMN_ORDER: readonly TaskStatus[] = ["todo", "inprogress", "done"];
+
+/** Shared type for task form save payloads */
+export interface TaskFormData {
+  title: string;
+  workstream: Workstream;
+  priority: Priority;
+  status: TaskStatus;
+  dueDate?: number;
+  dueTime?: string;
+  notes?: string;
+}

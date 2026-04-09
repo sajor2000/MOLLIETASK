@@ -67,8 +67,9 @@ export const generateTelegramLinkToken = mutation({
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
 
-    // Generate a random token (not cryptographically secure in default runtime,
-    // but acceptable for a short-lived linking token with 10-minute expiry)
+    // Convex runtime seeds Math.random() per invocation for determinism.
+    // Using it with a large character set + 32 chars gives sufficient entropy
+    // for a short-lived 10-minute linking token.
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     let token = "";
     for (let i = 0; i < 32; i++) {
@@ -94,13 +95,11 @@ export const linkTelegram = internalMutation({
   },
   returns: v.boolean(),
   handler: async (ctx, { token, chatId }) => {
-    const user = await ctx.db.query("users").first();
-    if (
-      !user ||
-      user.telegramLinkToken !== token ||
-      !user.telegramLinkExpiry ||
-      user.telegramLinkExpiry <= Date.now()
-    ) {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_telegramLinkToken", (q) => q.eq("telegramLinkToken", token))
+      .first();
+    if (!user || !user.telegramLinkExpiry || user.telegramLinkExpiry <= Date.now()) {
       return false;
     }
 
@@ -144,6 +143,16 @@ export const deleteAccount = mutation({
       if (task.scheduledReminderId) {
         await ctx.scheduler.cancel(task.scheduledReminderId);
       }
+      // Cascade-delete subtasks
+      const subtasks = await ctx.db
+        .query("subtasks")
+        .withIndex("by_parentTaskId_and_sortOrder", (q) =>
+          q.eq("parentTaskId", task._id),
+        )
+        .take(50);
+      for (const subtask of subtasks) {
+        await ctx.db.delete(subtask._id);
+      }
       await ctx.db.delete(task._id);
     }
 
@@ -180,6 +189,16 @@ export const deleteAccountCleanup = internalMutation({
     for (const task of tasks) {
       if (task.scheduledReminderId) {
         await ctx.scheduler.cancel(task.scheduledReminderId);
+      }
+      // Cascade-delete subtasks
+      const subtasks = await ctx.db
+        .query("subtasks")
+        .withIndex("by_parentTaskId_and_sortOrder", (q) =>
+          q.eq("parentTaskId", task._id),
+        )
+        .take(50);
+      for (const subtask of subtasks) {
+        await ctx.db.delete(subtask._id);
       }
       await ctx.db.delete(task._id);
     }

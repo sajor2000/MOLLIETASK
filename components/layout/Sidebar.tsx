@@ -30,7 +30,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 text-[13px] rounded-[4px] transition-all duration-200 ${
+              className={`flex items-center gap-3 px-3 py-2 text-[13px] rounded-[4px] transition-colors duration-200 ${
                 isActive
                   ? "text-accent font-medium bg-surface border-r-2 border-accent"
                   : "text-text-muted hover:text-text-secondary hover:bg-surface"
@@ -43,15 +43,6 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="mt-auto pt-6 border-t border-border px-2">
-        <Link
-          href="/settings"
-          className="flex items-center gap-3 text-[13px] text-text-secondary hover:text-accent transition-colors duration-200"
-        >
-          <Icon name="settings" className="w-5 h-5" />
-          <span>Settings</span>
-        </Link>
-      </div>
     </aside>
   );
 }

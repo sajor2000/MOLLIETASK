@@ -17,4 +17,11 @@ crons.interval(
   internal.reminders.checkDigest,
 );
 
+// Clean up old rate limit entries every 6 hours
+crons.interval(
+  "rate limit cleanup",
+  { hours: 6 },
+  internal.rateLimit.cleanupOldEntries,
+);
+
 export default crons;

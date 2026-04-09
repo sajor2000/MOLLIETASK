@@ -2,40 +2,39 @@
 
 import { useState } from "react";
 import type { Doc } from "@/convex/_generated/dataModel";
-import type { Workstream, Priority, TaskStatus } from "@/lib/constants";
+import type { Workstream, Priority, TaskStatus, TaskFormData } from "@/lib/constants";
 import { WORKSTREAM_CONFIG } from "@/lib/constants";
+import { toDateInputValue, fromDateInputValue } from "@/lib/dates";
 
 interface TaskFormProps {
   task?: Doc<"tasks"> | null;
-  onSave: (data: {
-    title: string;
-    workstream: Workstream;
-    priority: Priority;
-    status: TaskStatus;
-    dueDate?: number;
-    dueTime?: string;
-    notes?: string;
-  }) => void;
+  prefill?: Partial<TaskFormData>;
+  onSave: (data: TaskFormData) => void;
   onDelete?: () => void;
   onClose: () => void;
+  children?: React.ReactNode;
 }
 
-export function TaskForm({ task, onSave, onDelete, onClose }: TaskFormProps) {
-  const [title, setTitle] = useState(task?.title ?? "");
+export function TaskForm({ task, prefill, onSave, onDelete, onClose, children }: TaskFormProps) {
+  const [title, setTitle] = useState(task?.title ?? prefill?.title ?? "");
   const [workstream, setWorkstream] = useState<Workstream>(
-    task?.workstream ?? "practice"
+    task?.workstream ?? prefill?.workstream ?? "practice"
   );
   const [priority, setPriority] = useState<Priority>(
-    task?.priority ?? "normal"
+    task?.priority ?? prefill?.priority ?? "normal"
   );
   const [status, setStatus] = useState<TaskStatus>(
-    task?.status ?? "todo"
+    task?.status ?? prefill?.status ?? "todo"
   );
   const [dueDate, setDueDate] = useState(
-    task?.dueDate ? new Date(task.dueDate).toISOString().split("T")[0] : ""
+    task?.dueDate
+      ? toDateInputValue(task.dueDate)
+      : prefill?.dueDate
+        ? toDateInputValue(prefill.dueDate)
+        : ""
   );
-  const [dueTime, setDueTime] = useState(task?.dueTime ?? "");
-  const [notes, setNotes] = useState(task?.notes ?? "");
+  const [dueTime, setDueTime] = useState(task?.dueTime ?? prefill?.dueTime ?? "");
+  const [notes, setNotes] = useState(task?.notes ?? prefill?.notes ?? "");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   function handleSubmit(e: React.FormEvent) {
@@ -47,7 +46,7 @@ export function TaskForm({ task, onSave, onDelete, onClose }: TaskFormProps) {
       workstream,
       priority,
       status,
-      dueDate: dueDate ? new Date(dueDate + "T00:00:00").getTime() : undefined,
+      dueDate: dueDate ? fromDateInputValue(dueDate) : undefined,
       dueTime: dueTime || undefined,
       notes: notes.trim() || undefined,
     });
@@ -160,7 +159,7 @@ export function TaskForm({ task, onSave, onDelete, onClose }: TaskFormProps) {
                 onClick={() => {
                   const d = new Date();
                   d.setDate(d.getDate() + offset);
-                  setDueDate(d.toISOString().split("T")[0]);
+                  setDueDate(toDateInputValue(d.getTime()));
                 }}
                 className="px-3 py-1 text-[12px] text-text-secondary bg-bg-base border border-border/15 rounded-[4px] hover:border-accent/30 transition-colors duration-200"
               >
@@ -184,6 +183,9 @@ export function TaskForm({ task, onSave, onDelete, onClose }: TaskFormProps) {
             className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 resize-none"
           />
         </div>
+
+        {/* Subtasks slot */}
+        {children}
       </div>
 
       {/* Actions */}

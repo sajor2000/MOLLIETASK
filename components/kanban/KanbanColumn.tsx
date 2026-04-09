@@ -7,14 +7,14 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { TaskCard } from "./TaskCard";
-import type { Doc } from "@/convex/_generated/dataModel";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { TaskStatus, STATUS_CONFIG } from "@/lib/constants";
 
 interface KanbanColumnProps {
   status: TaskStatus;
   tasks: Doc<"tasks">[];
   onEditTask: (task: Doc<"tasks">) => void;
-  onCompleteTask: (taskId: string) => void;
+  onCompleteTask: (taskId: Id<"tasks">) => void;
 }
 
 export const KanbanColumn = memo(function KanbanColumn({
@@ -31,7 +31,7 @@ export const KanbanColumn = memo(function KanbanColumn({
     <div
       className={`flex flex-col min-w-[85vw] md:min-w-0 md:flex-1 snap-center ${
         isOver ? "bg-accent/5" : ""
-      } transition-colors duration-200`}
+      } transition-colors duration-150`}
     >
       {/* Column header */}
       <div className="flex items-center gap-2 px-4 py-3">

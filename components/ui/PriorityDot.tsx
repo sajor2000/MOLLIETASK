@@ -1,8 +1,10 @@
+import { memo } from "react";
+
 interface PriorityDotProps {
   priority: "high" | "normal";
 }
 
-export function PriorityDot({ priority }: PriorityDotProps) {
+export const PriorityDot = memo(function PriorityDot({ priority }: PriorityDotProps) {
   if (priority !== "high") return null;
   return (
     <span
@@ -10,4 +12,4 @@ export function PriorityDot({ priority }: PriorityDotProps) {
       aria-label="High priority"
     />
   );
-}
+});

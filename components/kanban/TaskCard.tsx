@@ -6,30 +6,13 @@ import { CSS } from "@dnd-kit/utilities";
 import { WorkstreamBadge } from "@/components/ui/WorkstreamBadge";
 import { PriorityDot } from "@/components/ui/PriorityDot";
 import { Icon } from "@/components/ui/Icon";
-import type { Doc } from "@/convex/_generated/dataModel";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { formatDueDate, isTaskOverdue } from "@/lib/dates";
 
 interface TaskCardProps {
   task: Doc<"tasks">;
   onEdit: (task: Doc<"tasks">) => void;
-  onComplete: (taskId: string) => void;
-}
-
-function formatDueDate(timestamp?: number): string | null {
-  if (!timestamp) return null;
-  const date = new Date(timestamp);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const taskDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const diffDays = Math.round(
-    (taskDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-  );
-
-  if (diffDays < 0) return `${Math.abs(diffDays)}d overdue`;
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Tomorrow";
-  if (diffDays < 7)
-    return date.toLocaleDateString("en-US", { weekday: "short" });
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  onComplete: (taskId: Id<"tasks">) => void;
 }
 
 export const TaskCard = memo(function TaskCard({ task, onEdit, onComplete }: TaskCardProps) {
@@ -48,13 +31,15 @@ export const TaskCard = memo(function TaskCard({ task, onEdit, onComplete }: Tas
   };
 
   const dueLabel = formatDueDate(task.dueDate);
-  const isOverdue = task.dueDate && task.dueDate < Date.now() && task.status !== "done";
+  const isOverdue = isTaskOverdue(task.dueDate, task.status);
+  const subtaskTotal = task.subtaskTotal ?? 0;
+  const subtaskCompleted = task.subtaskCompleted ?? 0;
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`group bg-surface rounded-[4px] p-4 transition-all duration-200 hover:bg-surface-elevated ${
+      className={`group bg-surface rounded-[4px] p-4 transition-colors duration-200 hover:bg-surface-elevated ${
         isDragging ? "opacity-50 scale-[1.02] ring-1 ring-accent/30" : ""
       }`}
     >
@@ -88,13 +73,20 @@ export const TaskCard = memo(function TaskCard({ task, onEdit, onComplete }: Tas
           className="flex-1 min-w-0 cursor-pointer"
           onClick={() => onEdit(task)}
         >
-          <p
-            className={`text-[14px] text-text-primary leading-snug truncate ${
-              task.status === "done" ? "line-through opacity-50" : ""
-            }`}
-          >
-            {task.title}
-          </p>
+          <div className="flex items-center gap-2">
+            <p
+              className={`text-[14px] text-text-primary leading-snug truncate flex-1 ${
+                task.status === "done" ? "line-through opacity-50" : ""
+              }`}
+            >
+              {task.title}
+            </p>
+            {subtaskTotal > 0 && (
+              <span className="shrink-0 text-[11px] text-text-muted bg-bg-base px-1.5 py-0.5 rounded-[3px]">
+                {subtaskCompleted}/{subtaskTotal}
+              </span>
+            )}
+          </div>
 
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             <WorkstreamBadge workstream={task.workstream} />
