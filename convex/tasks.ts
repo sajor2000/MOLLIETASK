@@ -250,6 +250,28 @@ export const updateTask = mutation({
     }
 
     const patch: Record<string, unknown> = { ...updates };
+
+    // Status change guards
+    const newStatus = updates.status;
+    if (newStatus && newStatus !== task.status) {
+      if (newStatus === "done") {
+        throw new Error("Use the complete action to mark tasks as done");
+      }
+      // Clear completedAt when moving away from done
+      if (task.status === "done") {
+        patch.completedAt = undefined;
+      }
+      // Recompute sortOrder for the target column
+      const lastInTarget = await ctx.db
+        .query("tasks")
+        .withIndex("by_userId_status_sortOrder", (q) =>
+          q.eq("userId", userId).eq("status", newStatus),
+        )
+        .order("desc")
+        .first();
+      patch.sortOrder = lastInTarget ? lastInTarget.sortOrder + 1000 : 1000;
+    }
+
     if (updates.reminderAt !== undefined) {
       patch.reminderSent = undefined;
     }

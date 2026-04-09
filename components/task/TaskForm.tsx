@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { Doc } from "@/convex/_generated/dataModel";
 import type { Workstream, Priority, Recurring, TaskStatus, TaskFormData } from "@/lib/constants";
-import { WORKSTREAM_CONFIG } from "@/lib/constants";
+import { WORKSTREAM_CONFIG, STATUS_CONFIG } from "@/lib/constants";
 import { toDateInputValue, fromDateInputValue } from "@/lib/dates";
 import { TaskAttachments } from "./TaskAttachments";
 
@@ -120,6 +120,29 @@ export function TaskForm({ task, prefill, onSave, onDelete, onClose, children }:
                 }`}
               >
                 {p === "high" ? "High" : "Normal"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Status — exclude "done" to prevent bypassing completeTaskCore */}
+        <div>
+          <label className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
+            Status
+          </label>
+          <div className="flex gap-1 bg-bg-base rounded-[4px] p-1">
+            {(["todo", "inprogress"] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setStatus(s)}
+                className={`flex-1 py-1.5 text-[13px] rounded-[4px] transition-all duration-200 ${
+                  status === s
+                    ? "bg-surface text-accent"
+                    : "text-text-muted hover:text-text-secondary"
+                }`}
+              >
+                {STATUS_CONFIG[s].label}
               </button>
             ))}
           </div>
