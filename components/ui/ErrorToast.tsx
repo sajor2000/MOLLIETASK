@@ -20,7 +20,7 @@ export function ErrorToast({
   useEffect(() => {
     const timer = setTimeout(() => onDismissRef.current(), duration);
     return () => clearTimeout(timer);
-  }, [duration]);
+  }, [duration, message]);
 
   return (
     <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-50 animate-[slideUp_200ms_ease-out]">

@@ -55,14 +55,29 @@ export function useTaskActions(tasks?: Doc<"tasks">[]) {
     async (data: TaskFormData) => {
       if (editingTask) {
         try {
-          await updateTask({ taskId: editingTask._id, ...data });
+          await updateTask({
+            taskId: editingTask._id,
+            title: data.title,
+            workstream: data.workstream,
+            priority: data.priority,
+            status: data.status,
+            dueDate: data.dueDate,
+            dueTime: data.dueTime,
+            recurring: data.recurring,
+            notes: data.notes,
+            assignedStaffId: data.assignedStaffId ?? null,
+          });
           setEditingTask(null);
         } catch {
           setErrorMessage("Failed to update task");
         }
       } else {
         try {
-          const taskId = await addTask(data);
+          const { assignedStaffId, ...rest } = data;
+          const taskId = await addTask({
+            ...rest,
+            ...(assignedStaffId ? { assignedStaffId } : {}),
+          });
           const doc = await convex.query(api.tasks.getTask, { taskId });
           if (doc) {
             setEditingTask(doc);
@@ -91,6 +106,9 @@ export function useTaskActions(tasks?: Doc<"tasks">[]) {
     async (taskId: Id<"tasks">) => {
       const task = tasksRef.current?.find((t) => t._id === taskId);
       if (!task || task.status === "done") return;
+
+      // Clear any pending undo so rapid completions don't orphan spawned tasks
+      setUndoAction(null);
 
       try {
         const nextTaskId = await completeTask({ taskId });
@@ -129,11 +147,7 @@ export function useTaskActions(tasks?: Doc<"tasks">[]) {
 
   const handleClearCompleted = useCallback(async () => {
     try {
-      let hasMore = true;
-      while (hasMore) {
-        const result = await deleteCompletedTasks();
-        hasMore = result.hasMore;
-      }
+      await deleteCompletedTasks();
     } catch {
       setErrorMessage("Failed to clear completed tasks");
     }

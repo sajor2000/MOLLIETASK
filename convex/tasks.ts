@@ -9,32 +9,36 @@ import {
   recurringValidator,
 } from "./schema";
 import { getAuthUserId } from "./authHelpers";
+import { getStaffOwnedBy } from "./staff";
+
+const taskDocValidator = v.object({
+  _id: v.id("tasks"),
+  _creationTime: v.number(),
+  userId: v.id("users"),
+  title: v.string(),
+  workstream: workstreamValidator,
+  priority: priorityValidator,
+  status: statusValidator,
+  dueDate: v.optional(v.number()),
+  dueTime: v.optional(v.string()),
+  recurring: v.optional(recurringValidator),
+  notes: v.optional(v.string()),
+  sortOrder: v.number(),
+  reminderAt: v.optional(v.number()),
+  reminderSent: v.optional(v.boolean()),
+  scheduledReminderId: v.optional(v.id("_scheduled_functions")),
+  completedAt: v.optional(v.number()),
+  createdAt: v.number(),
+  subtaskTotal: v.optional(v.number()),
+  subtaskCompleted: v.optional(v.number()),
+  assignedStaffId: v.optional(v.id("staffMembers")),
+});
 
 // ── Queries ──────────────────────────────────────────
 
 export const getTasksByStatus = query({
   args: {},
-  returns: v.array(v.object({
-    _id: v.id("tasks"),
-    _creationTime: v.number(),
-    userId: v.id("users"),
-    title: v.string(),
-    workstream: workstreamValidator,
-    priority: priorityValidator,
-    status: statusValidator,
-    dueDate: v.optional(v.number()),
-    dueTime: v.optional(v.string()),
-    recurring: v.optional(recurringValidator),
-    notes: v.optional(v.string()),
-    sortOrder: v.number(),
-    reminderAt: v.optional(v.number()),
-    reminderSent: v.optional(v.boolean()),
-    scheduledReminderId: v.optional(v.id("_scheduled_functions")),
-    completedAt: v.optional(v.number()),
-    createdAt: v.number(),
-    subtaskTotal: v.optional(v.number()),
-    subtaskCompleted: v.optional(v.number()),
-  })),
+  returns: v.array(taskDocValidator),
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
     return await ctx.db
@@ -46,30 +50,7 @@ export const getTasksByStatus = query({
 
 export const getTask = query({
   args: { taskId: v.id("tasks") },
-  returns: v.union(
-    v.object({
-      _id: v.id("tasks"),
-      _creationTime: v.number(),
-      userId: v.id("users"),
-      title: v.string(),
-      workstream: workstreamValidator,
-      priority: priorityValidator,
-      status: statusValidator,
-      dueDate: v.optional(v.number()),
-      dueTime: v.optional(v.string()),
-      recurring: v.optional(recurringValidator),
-      notes: v.optional(v.string()),
-      sortOrder: v.number(),
-      reminderAt: v.optional(v.number()),
-      reminderSent: v.optional(v.boolean()),
-      scheduledReminderId: v.optional(v.id("_scheduled_functions")),
-      completedAt: v.optional(v.number()),
-      createdAt: v.number(),
-      subtaskTotal: v.optional(v.number()),
-      subtaskCompleted: v.optional(v.number()),
-    }),
-    v.null(),
-  ),
+  returns: v.union(taskDocValidator, v.null()),
   handler: async (ctx, { taskId }) => {
     const userId = await getAuthUserId(ctx);
     const task = await ctx.db.get(taskId);
@@ -122,6 +103,7 @@ export async function completeTaskCore(
       notes: task.notes,
       sortOrder: task.sortOrder,
       createdAt: Date.now(),
+      ...(task.assignedStaffId ? { assignedStaffId: task.assignedStaffId } : {}),
     });
 
     if (subtasks.length > 0) {
@@ -173,6 +155,7 @@ export const addTask = mutation({
     recurring: v.optional(recurringValidator),
     notes: v.optional(v.string()),
     reminderAt: v.optional(v.number()),
+    assignedStaffId: v.optional(v.id("staffMembers")),
   },
   returns: v.id("tasks"),
   handler: async (ctx, args) => {
@@ -184,6 +167,16 @@ export const addTask = mutation({
     if (args.dueTime && !/^\d{2}:\d{2}$/.test(args.dueTime))
       throw new Error("dueTime must be HH:MM");
 
+    let assignedStaffId: typeof args.assignedStaffId;
+    if (args.assignedStaffId) {
+      if (!(await getStaffOwnedBy(ctx, args.assignedStaffId, userId))) {
+        throw new Error("Invalid assignee");
+      }
+      assignedStaffId = args.assignedStaffId;
+    } else {
+      assignedStaffId = undefined;
+    }
+
     const existing = await ctx.db
       .query("tasks")
       .withIndex("by_userId_status_sortOrder", (q) =>
@@ -194,11 +187,13 @@ export const addTask = mutation({
 
     const sortOrder = existing ? existing.sortOrder + 1000 : 1000;
 
+    const { assignedStaffId: _a, ...rest } = args;
     const taskId = await ctx.db.insert("tasks", {
-      ...args,
+      ...rest,
       userId,
       sortOrder,
       createdAt: Date.now(),
+      ...(assignedStaffId ? { assignedStaffId } : {}),
     });
 
     if (args.reminderAt) {
@@ -228,9 +223,12 @@ export const updateTask = mutation({
     recurring: v.optional(recurringValidator),
     notes: v.optional(v.string()),
     reminderAt: v.optional(v.number()),
+    assignedStaffId: v.optional(
+      v.union(v.id("staffMembers"), v.null()),
+    ),
   },
   returns: v.null(),
-  handler: async (ctx, { taskId, ...updates }) => {
+  handler: async (ctx, { taskId, assignedStaffId, ...updates }) => {
     const userId = await getAuthUserId(ctx);
 
     const task = await ctx.db.get(taskId);
@@ -249,7 +247,33 @@ export const updateTask = mutation({
       await ctx.scheduler.cancel(task.scheduledReminderId);
     }
 
-    const patch: Record<string, unknown> = { ...updates };
+    const patch: Partial<{
+      title: string;
+      workstream: Doc<"tasks">["workstream"];
+      priority: Doc<"tasks">["priority"];
+      status: Doc<"tasks">["status"];
+      dueDate: number;
+      dueTime: string;
+      recurring: Doc<"tasks">["recurring"];
+      notes: string;
+      sortOrder: number;
+      reminderAt: number;
+      reminderSent: boolean;
+      scheduledReminderId: Doc<"tasks">["scheduledReminderId"];
+      completedAt: number;
+      assignedStaffId: Doc<"tasks">["assignedStaffId"];
+    }> = { ...updates };
+
+    if (assignedStaffId !== undefined) {
+      if (assignedStaffId === null) {
+        patch.assignedStaffId = undefined;
+      } else {
+        if (!(await getStaffOwnedBy(ctx, assignedStaffId, userId))) {
+          throw new Error("Invalid assignee");
+        }
+        patch.assignedStaffId = assignedStaffId;
+      }
+    }
 
     // Status change guards
     const newStatus = updates.status;
@@ -378,6 +402,7 @@ export const uncompleteTask = mutation({
         for (const s of subtasks) {
           await ctx.db.delete(s._id);
         }
+        await deleteTaskAttachments(ctx, spawnedTaskId);
         await ctx.db.delete(spawnedTaskId);
       }
     }
@@ -394,6 +419,10 @@ export const reorderTask = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { taskId, newStatus, newSortOrder }) => {
+    if (!Number.isFinite(newSortOrder)) {
+      throw new Error("Invalid sort order");
+    }
+
     const userId = await getAuthUserId(ctx);
 
     const task = await ctx.db.get(taskId);
@@ -411,19 +440,23 @@ export const reorderTask = mutation({
       });
 
       // Schedule rebalance if sort order gap is dangerously small
-      const neighbors = await ctx.db
+      const prevNeighbor = await ctx.db
         .query("tasks")
         .withIndex("by_userId_status_sortOrder", (q) =>
-          q.eq("userId", userId).eq("status", newStatus),
+          q.eq("userId", userId).eq("status", newStatus).lt("sortOrder", newSortOrder),
         )
-        .take(500);
+        .order("desc")
+        .first();
+      const nextNeighbor = await ctx.db
+        .query("tasks")
+        .withIndex("by_userId_status_sortOrder", (q) =>
+          q.eq("userId", userId).eq("status", newStatus).gt("sortOrder", newSortOrder),
+        )
+        .first();
 
-      const idx = neighbors.findIndex((t) => t._id === taskId);
       const needsRebalance =
-        (idx > 0 &&
-          Math.abs(neighbors[idx].sortOrder - neighbors[idx - 1].sortOrder) < 0.001) ||
-        (idx < neighbors.length - 1 &&
-          Math.abs(neighbors[idx + 1].sortOrder - neighbors[idx].sortOrder) < 0.001);
+        (prevNeighbor && Math.abs(newSortOrder - prevNeighbor.sortOrder) < 0.001) ||
+        (nextNeighbor && Math.abs(nextNeighbor.sortOrder - newSortOrder) < 0.001);
 
       if (needsRebalance) {
         await ctx.scheduler.runAfter(0, internal.tasks.rebalanceSortOrders, {
@@ -439,7 +472,7 @@ export const reorderTask = mutation({
 
 export const deleteCompletedTasks = mutation({
   args: {},
-  returns: v.object({ deleted: v.number(), hasMore: v.boolean() }),
+  returns: v.object({ deleted: v.number() }),
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
 
@@ -466,7 +499,50 @@ export const deleteCompletedTasks = mutation({
       await ctx.db.delete(task._id);
     }
 
-    return { deleted: batch.length, hasMore: completed.length > 100 };
+    // Schedule continuation server-side so client isn't blocked
+    if (completed.length > 100) {
+      await ctx.scheduler.runAfter(0, internal.tasks.deleteCompletedTasksBatch, {
+        userId,
+      });
+    }
+
+    return { deleted: batch.length };
+  },
+});
+
+/** Server-side continuation for bulk delete — avoids blocking the client. */
+export const deleteCompletedTasksBatch = internalMutation({
+  args: { userId: v.id("users") },
+  returns: v.null(),
+  handler: async (ctx, { userId }) => {
+    const completed = await ctx.db
+      .query("tasks")
+      .withIndex("by_userId_status_sortOrder", (q) =>
+        q.eq("userId", userId).eq("status", "done"),
+      )
+      .take(101);
+
+    const batch = completed.slice(0, 100);
+    for (const task of batch) {
+      const subtasks = await ctx.db
+        .query("subtasks")
+        .withIndex("by_parentTaskId_and_sortOrder", (q) =>
+          q.eq("parentTaskId", task._id),
+        )
+        .take(50);
+      for (const s of subtasks) {
+        await ctx.db.delete(s._id);
+      }
+      await deleteTaskAttachments(ctx, task._id);
+      await ctx.db.delete(task._id);
+    }
+
+    if (completed.length > 100) {
+      await ctx.scheduler.runAfter(0, internal.tasks.deleteCompletedTasksBatch, {
+        userId,
+      });
+    }
+    return null;
   },
 });
 
