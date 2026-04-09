@@ -13,7 +13,24 @@ export function useTaskActions(tasks?: Doc<"tasks">[]) {
   const deleteTask = useMutation(api.tasks.deleteTask);
   const completeTask = useMutation(api.tasks.completeTask);
   const uncompleteTask = useMutation(api.tasks.uncompleteTask);
-  const reorderTask = useMutation(api.tasks.reorderTask);
+  const reorderTask = useMutation(api.tasks.reorderTask).withOptimisticUpdate(
+    (localStore, args) => {
+      const currentTasks = localStore.getQuery(api.tasks.getTasksByStatus, {});
+      if (currentTasks === undefined) return;
+
+      // Skip optimistic update for drag-to-done (complex server side effects)
+      const task = currentTasks.find((t) => t._id === args.taskId);
+      if (!task) return;
+      if (args.newStatus === "done" && task.status !== "done") return;
+
+      const updatedTasks = currentTasks.map((t) =>
+        t._id === args.taskId
+          ? { ...t, status: args.newStatus, sortOrder: args.newSortOrder }
+          : t,
+      );
+      localStore.setQuery(api.tasks.getTasksByStatus, {}, updatedTasks);
+    },
+  );
   const deleteCompletedTasks = useMutation(api.tasks.deleteCompletedTasks);
 
   // Stable ref for tasks to avoid re-renders in callbacks
