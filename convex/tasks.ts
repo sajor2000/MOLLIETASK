@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query, MutationCtx } from "./_generated/server";
+import { mutation, internalMutation, query, MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
@@ -387,6 +387,28 @@ export const reorderTask = mutation({
         status: newStatus,
         sortOrder: newSortOrder,
       });
+
+      // Schedule rebalance if sort order gap is dangerously small
+      const neighbors = await ctx.db
+        .query("tasks")
+        .withIndex("by_userId_status_sortOrder", (q) =>
+          q.eq("userId", userId).eq("status", newStatus),
+        )
+        .take(500);
+
+      const idx = neighbors.findIndex((t) => t._id === taskId);
+      const needsRebalance =
+        (idx > 0 &&
+          Math.abs(neighbors[idx].sortOrder - neighbors[idx - 1].sortOrder) < 0.001) ||
+        (idx < neighbors.length - 1 &&
+          Math.abs(neighbors[idx + 1].sortOrder - neighbors[idx].sortOrder) < 0.001);
+
+      if (needsRebalance) {
+        await ctx.scheduler.runAfter(0, internal.tasks.rebalanceSortOrders, {
+          userId,
+          status: newStatus,
+        });
+      }
     }
 
     return null;
@@ -423,6 +445,32 @@ export const deleteCompletedTasks = mutation({
     }
 
     return { deleted: batch.length, hasMore: completed.length > 100 };
+  },
+});
+
+// ── Sort order rebalance ────────────────────────────
+
+export const rebalanceSortOrders = internalMutation({
+  args: {
+    userId: v.id("users"),
+    status: statusValidator,
+  },
+  returns: v.null(),
+  handler: async (ctx, { userId, status }) => {
+    const tasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_userId_status_sortOrder", (q) =>
+        q.eq("userId", userId).eq("status", status),
+      )
+      .take(500);
+
+    for (let i = 0; i < tasks.length; i++) {
+      const newOrder = (i + 1) * 1000;
+      if (tasks[i].sortOrder !== newOrder) {
+        await ctx.db.patch(tasks[i]._id, { sortOrder: newOrder });
+      }
+    }
+    return null;
   },
 });
 
