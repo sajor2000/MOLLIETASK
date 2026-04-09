@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, memo } from "react";
+import { Icon } from "@/components/ui/Icon";
 import {
   DndContext,
   DragEndEvent,
@@ -43,6 +44,19 @@ export const KanbanBoard = memo(function KanbanBoard({
   onClearCompleted,
 }: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
+
+  // Hide/show Done column, persisted in localStorage
+  const [showDone, setShowDone] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("kanban-show-done") === "true";
+  });
+  const toggleDone = useCallback(() => {
+    setShowDone((prev) => {
+      const next = !prev;
+      localStorage.setItem("kanban-show-done", String(next));
+      return next;
+    });
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -126,6 +140,8 @@ export const KanbanBoard = memo(function KanbanBoard({
   }, [taskMap, tasksByStatus, onMoveTask]);
 
   const activeTask = activeId ? taskMap.get(activeId) ?? null : null;
+  const visibleColumns = showDone ? COLUMN_ORDER : COLUMN_ORDER.filter((s) => s !== "done");
+  const doneCount = tasksByStatus.done.length;
 
   return (
     <DndContext
@@ -134,18 +150,42 @@ export const KanbanBoard = memo(function KanbanBoard({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex gap-0 h-full overflow-x-auto snap-x snap-mandatory md:snap-none md:overflow-x-visible">
-        {COLUMN_ORDER.map((status) => (
-          <KanbanColumn
-            key={status}
-            status={status}
-            tasks={tasksByStatus[status]}
-            staffById={staffById}
-            onEditTask={onEditTask}
-            onCompleteTask={onCompleteTask}
-            onClearCompleted={status === "done" ? onClearCompleted : undefined}
-          />
-        ))}
+      <div className="flex flex-col h-full">
+        {/* Filter bar */}
+        <div className="flex items-center justify-end px-4 py-2 shrink-0">
+          <button
+            onClick={toggleDone}
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-[4px] text-[12px] font-medium transition-colors duration-200 ${
+              showDone
+                ? "bg-success/15 text-success"
+                : "bg-surface text-text-muted hover:text-text-secondary"
+            }`}
+          >
+            <Icon name="task_alt" className="w-4 h-4" />
+            {showDone ? "Hide completed" : "Completed"}
+            {doneCount > 0 && (
+              <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] ${
+                showDone ? "bg-success/25 text-success" : "bg-text-muted/20 text-text-muted"
+              }`}>
+                {doneCount}
+              </span>
+            )}
+          </button>
+        </div>
+
+        <div className="flex gap-0 flex-1 min-h-0 overflow-x-auto snap-x snap-mandatory md:snap-none md:overflow-x-visible">
+          {visibleColumns.map((status) => (
+            <KanbanColumn
+              key={status}
+              status={status}
+              tasks={tasksByStatus[status]}
+              staffById={staffById}
+              onEditTask={onEditTask}
+              onCompleteTask={onCompleteTask}
+              onClearCompleted={status === "done" ? onClearCompleted : undefined}
+            />
+          ))}
+        </div>
       </div>
 
       <DragOverlay>

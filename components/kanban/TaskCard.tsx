@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { WorkstreamBadge } from "@/components/ui/WorkstreamBadge";
@@ -22,6 +22,7 @@ export const TaskCard = memo(function TaskCard({
   onEdit,
   onComplete,
 }: TaskCardProps) {
+  const [completing, setCompleting] = useState(false);
   const {
     attributes,
     listeners,
@@ -64,13 +65,19 @@ export const TaskCard = memo(function TaskCard({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onComplete(task._id);
+            if (task.status === "done" || completing) return;
+            setCompleting(true);
+            setTimeout(() => onComplete(task._id), 300);
           }}
-          className="mt-0.5 w-[18px] h-[18px] rounded-[4px] border border-text-muted/40 shrink-0 flex items-center justify-center hover:border-accent transition-colors duration-200"
+          className={`mt-0.5 w-[18px] h-[18px] rounded-[4px] border shrink-0 flex items-center justify-center transition-all duration-200 ${
+            completing || task.status === "done"
+              ? "border-success bg-success/20"
+              : "border-text-muted/60 hover:border-accent"
+          }`}
           aria-label={`Complete ${task.title}`}
         >
-          {task.status === "done" && (
-            <Icon name="check" className="w-[14px] h-[14px] text-success" />
+          {(completing || task.status === "done") && (
+            <Icon name="check" className="w-[14px] h-[14px] text-success animate-[checkPop_200ms_ease-out]" />
           )}
         </button>
 

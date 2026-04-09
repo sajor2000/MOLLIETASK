@@ -7,6 +7,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { TaskCard } from "./TaskCard";
+import { Icon } from "@/components/ui/Icon";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { TaskStatus, STATUS_CONFIG } from "@/lib/constants";
 import { staffInitials } from "@/lib/staffUtils";
@@ -106,8 +107,14 @@ export const KanbanColumn = memo(function KanbanColumn({
         </SortableContext>
 
         {tasks.length === 0 && (
-          <div className="flex items-center justify-center h-[120px] border border-dashed border-border/50 rounded-[4px] text-[13px] text-text-muted">
-            Drop tasks here
+          <div className="flex flex-col items-center justify-center h-[120px] border border-dashed border-border rounded-[4px] gap-2">
+            <Icon
+              name={status === "todo" ? "add_task" : status === "inprogress" ? "pending" : "task_alt"}
+              className="w-6 h-6 text-text-muted"
+            />
+            <span className="text-[12px] text-text-muted">
+              {status === "todo" ? "Add or drag tasks here" : status === "inprogress" ? "Drag tasks in progress" : "Completed tasks appear here"}
+            </span>
           </div>
         )}
       </div>

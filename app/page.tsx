@@ -10,6 +10,7 @@ import { AiCaptureBar } from "@/components/task/AiCaptureBar";
 import { TemplateLibrary } from "@/components/task/TemplateLibrary";
 import { UndoToast } from "@/components/ui/UndoToast";
 import { ErrorToast } from "@/components/ui/ErrorToast";
+import { SuccessToast } from "@/components/ui/SuccessToast";
 import type { Doc } from "@/convex/_generated/dataModel";
 import type { TaskFormData } from "@/lib/constants";
 import { useTaskActions } from "@/hooks/useTaskActions";
@@ -32,6 +33,8 @@ export default function KanbanPage() {
     clearUndo,
     errorMessage,
     clearError,
+    successMessage,
+    clearSuccess,
   } = useTaskActions(tasks);
 
   // Kanban-specific state
@@ -40,9 +43,21 @@ export default function KanbanPage() {
   const [showTemplates, setShowTemplates] = useState(false);
 
   const filteredTasks = useMemo(() => {
-    if (!tasks || !searchQuery.trim()) return tasks;
-    const q = searchQuery.toLowerCase();
-    return tasks.filter((t) => t.title.toLowerCase().includes(q));
+    if (!tasks) return tasks;
+    const now = Date.now();
+    const fiveDaysMs = 5 * 24 * 60 * 60 * 1000;
+
+    return tasks.filter((t) => {
+      // Hide recurring tasks whose due date is more than 5 days away
+      if (t.recurring && t.dueDate && t.status !== "done" && t.dueDate - now > fiveDaysMs) {
+        return false;
+      }
+      // Search filter
+      if (searchQuery.trim()) {
+        return t.title.toLowerCase().includes(searchQuery.toLowerCase());
+      }
+      return true;
+    });
   }, [tasks, searchQuery]);
 
   const staffKey = staffList?.map((s) => s._id).join(",") ?? "";
@@ -131,6 +146,10 @@ export default function KanbanPage() {
 
       {errorMessage && !undoAction && (
         <ErrorToast message={errorMessage} onDismiss={clearError} />
+      )}
+
+      {successMessage && !undoAction && !errorMessage && (
+        <SuccessToast message={successMessage} onDismiss={clearSuccess} />
       )}
 
       {showTemplates && (

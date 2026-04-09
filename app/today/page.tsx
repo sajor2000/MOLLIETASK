@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
@@ -8,6 +8,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { TaskDetailView } from "@/components/task/TaskDetailView";
 import { UndoToast } from "@/components/ui/UndoToast";
 import { ErrorToast } from "@/components/ui/ErrorToast";
+import { SuccessToast } from "@/components/ui/SuccessToast";
 import { Icon } from "@/components/ui/Icon";
 import { WORKSTREAM_CONFIG } from "@/lib/constants";
 import type { TaskFormData } from "@/lib/constants";
@@ -30,6 +31,8 @@ export default function TodayPage() {
     clearUndo,
     errorMessage,
     clearError,
+    successMessage,
+    clearSuccess,
   } = useTaskActions(tasks);
 
   const [todayStr] = useState(() => toCSTDateString(Date.now()));
@@ -89,11 +92,14 @@ export default function TodayPage() {
           <p className="text-[13px] text-text-muted text-center py-12">Loading...</p>
         ) : isEmpty ? (
           <div className="text-center py-16">
-            <p className="text-[13px] text-text-muted">Nothing due today</p>
+            <Icon name="wb_sunny" className="w-10 h-10 text-accent/40 mx-auto mb-3" />
+            <p className="text-[14px] text-text-secondary">All clear for today</p>
+            <p className="text-[12px] text-text-muted mt-1">Enjoy the free time or plan ahead</p>
             <button
               onClick={handleAddToday}
-              className="mt-3 text-[13px] text-accent hover:opacity-80 transition-opacity"
+              className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium text-accent bg-accent/10 rounded-[4px] hover:bg-accent/20 transition-colors duration-200"
             >
+              <Icon name="add" className="w-4 h-4" />
               Add a task
             </button>
           </div>
@@ -155,6 +161,10 @@ export default function TodayPage() {
       {errorMessage && !undoAction && (
         <ErrorToast message={errorMessage} onDismiss={clearError} />
       )}
+
+      {successMessage && !undoAction && !errorMessage && (
+        <SuccessToast message={successMessage} onDismiss={clearSuccess} />
+      )}
     </AppShell>
   );
 }
@@ -200,17 +210,30 @@ function TaskRow({
   onComplete: () => void;
   onEdit: () => void;
 }) {
+  const [completing, setCompleting] = useState(false);
   const wsConfig = WORKSTREAM_CONFIG[task.workstream];
 
+  const handleComplete = useCallback(() => {
+    if (completing) return;
+    setCompleting(true);
+    setTimeout(onComplete, 300);
+  }, [completing, onComplete]);
+
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 rounded-[4px] bg-surface hover:bg-surface-elevated transition-colors duration-200 group">
+    <div className={`flex items-center gap-3 px-3 py-2.5 rounded-[4px] bg-surface hover:bg-surface-elevated transition-all duration-200 group ${completing ? "animate-[completeFade_300ms_ease-out_forwards]" : ""}`}>
       <button
-        onClick={onComplete}
-        className="flex-shrink-0 w-5 h-5 rounded-full border-2 border-border hover:border-accent transition-colors duration-200"
+        onClick={handleComplete}
+        className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
+          completing ? "border-success bg-success/20" : "border-text-muted/60 hover:border-accent"
+        }`}
         aria-label="Complete task"
-      />
+      >
+        {completing && (
+          <Icon name="check" className="w-3 h-3 text-success animate-[checkPop_200ms_ease-out]" />
+        )}
+      </button>
       <button onClick={onEdit} className="flex-1 min-w-0 text-left">
-        <p className="text-[13px] text-text-primary truncate">{task.title}</p>
+        <p className={`text-[13px] text-text-primary truncate ${completing ? "line-through opacity-50" : ""}`}>{task.title}</p>
         <div className="flex items-center gap-2 mt-0.5">
           <span className={`text-[11px] ${wsConfig.textClass}`}>
             {wsConfig.label}
