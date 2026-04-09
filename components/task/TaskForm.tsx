@@ -123,8 +123,8 @@ export function TaskForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-6">
+    <form onSubmit={handleSubmit} className="flex flex-1 flex-col min-h-0">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y px-6 pb-6 space-y-6 [-webkit-overflow-scrolling:touch]">
         {/* Title */}
         <div>
           <input
@@ -201,7 +201,7 @@ export function TaskForm({
                 }}
                 className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
               >
-                <option value="">Unassigned</option>
+                <option value="">Me (default)</option>
                 {[...staffMembers]
                   .sort((a, b) => a.sortOrder - b.sortOrder)
                   .map((s) => (

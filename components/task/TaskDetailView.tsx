@@ -43,6 +43,31 @@ export function TaskDetailView({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Focus trap — keep Tab/Shift+Tab inside the dialog
+  useEffect(() => {
+    if (!dialogEl) return;
+    const selector =
+      'a[href], button:not([disabled]), textarea, input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+    function handleTab(e: KeyboardEvent) {
+      if (e.key !== "Tab") return;
+      const focusable = dialogEl!.querySelectorAll<HTMLElement>(selector);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+
+    dialogEl.addEventListener("keydown", handleTab);
+    return () => dialogEl.removeEventListener("keydown", handleTab);
+  }, [dialogEl]);
+
   // Prevent body scroll when modal is open
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -63,7 +88,7 @@ export function TaskDetailView({
       <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-6">
         <div
           ref={dialogRef}
-          className="bg-surface-elevated border-t border-x md:border border-border rounded-t-[8px] md:rounded-[4px] w-full md:max-w-[480px] max-h-[85vh] md:max-h-[80vh] flex flex-col animate-[slideUp_200ms_ease-out] md:animate-[fadeIn_150ms_ease-out]"
+          className="bg-surface-elevated border-t border-x md:border border-border rounded-t-[8px] md:rounded-[4px] w-full md:max-w-[480px] max-h-[85dvh] md:max-h-[80vh] flex flex-col min-h-0 overflow-hidden animate-[slideUp_200ms_ease-out] md:animate-[fadeIn_150ms_ease-out]"
           role="dialog"
           aria-modal="true"
           aria-label={task ? "Edit task" : "New task"}
@@ -86,18 +111,20 @@ export function TaskDetailView({
             </button>
           </div>
 
-          <TaskForm
-            key={task?._id ?? "new"}
-            task={task}
-            prefill={prefill}
-            staffMembers={staffMembers}
-            hotkeyRoot={dialogEl}
-            onSave={onSave}
-            onDelete={onDelete}
-            onClose={onClose}
-          >
-            {task?._id && <SubtaskList parentTaskId={task._id} />}
-          </TaskForm>
+          <div className="flex-1 min-h-0">
+            <TaskForm
+              key={task?._id ?? "new"}
+              task={task}
+              prefill={prefill}
+              staffMembers={staffMembers}
+              hotkeyRoot={dialogEl}
+              onSave={onSave}
+              onDelete={onDelete}
+              onClose={onClose}
+            >
+              {task?._id && <SubtaskList parentTaskId={task._id} />}
+            </TaskForm>
+          </div>
         </div>
       </div>
     </>
