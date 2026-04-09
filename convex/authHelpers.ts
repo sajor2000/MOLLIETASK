@@ -1,4 +1,5 @@
-import { QueryCtx, ActionCtx } from "./_generated/server";
+import { QueryCtx, MutationCtx, ActionCtx } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 
 /**
@@ -26,15 +27,11 @@ export async function getAuthUserId(ctx: QueryCtx): Promise<Id<"users">> {
  * Actions don't have ctx.db, so this uses ctx.runQuery internally.
  * Throws if not authenticated.
  */
-export async function getActionUserId(
-  ctx: ActionCtx,
-  runQuery: ActionCtx["runQuery"],
-): Promise<Id<"users">> {
+export async function getActionUserId(ctx: ActionCtx): Promise<Id<"users">> {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new Error("Not authenticated");
 
-  const { internal } = await import("./_generated/api");
-  const userId = await runQuery(internal.authInternal.getUserByToken, {
+  const userId = await ctx.runQuery(internal.authInternal.getUserByToken, {
     tokenIdentifier: identity.tokenIdentifier,
   });
   if (!userId) throw new Error("User not found");
@@ -42,21 +39,12 @@ export async function getActionUserId(
 }
 
 /**
- * Get the authenticated user document.
- * Throws if not authenticated or user not found.
- */
-export async function getAuthUser(ctx: QueryCtx) {
-  const userId = await getAuthUserId(ctx);
-  const user = await ctx.db.get(userId);
-  if (!user) throw new Error("User not found");
-  return user;
-}
-
-/**
  * Store or update the user from their identity.
  * Called when a user signs in to ensure they have a record in the users table.
+ * Skips the patch if name and email are already up to date (avoids unnecessary
+ * write transactions that would invalidate reactive query subscriptions).
  */
-export async function storeUser(ctx: QueryCtx & { db: QueryCtx["db"] & { insert: any; patch: any } }) {
+export async function storeUser(ctx: MutationCtx): Promise<Id<"users">> {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new Error("Not authenticated");
 
@@ -68,10 +56,12 @@ export async function storeUser(ctx: QueryCtx & { db: QueryCtx["db"] & { insert:
     .unique();
 
   if (existing) {
-    await ctx.db.patch(existing._id, {
-      name: identity.name,
-      email: identity.email,
-    });
+    if (existing.name !== identity.name || existing.email !== identity.email) {
+      await ctx.db.patch(existing._id, {
+        name: identity.name,
+        email: identity.email,
+      });
+    }
     return existing._id;
   }
 

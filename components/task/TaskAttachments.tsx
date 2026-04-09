@@ -32,27 +32,29 @@ export function TaskAttachments({ taskId }: TaskAttachmentsProps) {
     setUploadError(null);
     setUploading(true);
     try {
-      for (const file of Array.from(files)) {
-        const postUrl = await generateUploadUrl({});
-        const uploadContentType = file.type || "application/octet-stream";
-        const res = await fetch(postUrl, {
-          method: "POST",
-          headers: { "Content-Type": uploadContentType },
-          body: file,
-        });
-        if (!res.ok) {
-          throw new Error(`Upload failed (${res.status})`);
-        }
-        const json = (await res.json()) as { storageId?: string };
-        if (!json.storageId) {
-          throw new Error("Upload response missing storageId");
-        }
-        await finalizeUpload({
-          taskId,
-          storageId: json.storageId as Id<"_storage">,
-          filename: file.name,
-        });
-      }
+      await Promise.all(
+        Array.from(files).map(async (file) => {
+          const postUrl = await generateUploadUrl({});
+          const uploadContentType = file.type || "application/octet-stream";
+          const res = await fetch(postUrl, {
+            method: "POST",
+            headers: { "Content-Type": uploadContentType },
+            body: file,
+          });
+          if (!res.ok) {
+            throw new Error(`Upload failed (${res.status})`);
+          }
+          const json = (await res.json()) as { storageId?: string };
+          if (!json.storageId) {
+            throw new Error("Upload response missing storageId");
+          }
+          await finalizeUpload({
+            taskId,
+            storageId: json.storageId as Id<"_storage">,
+            filename: file.name,
+          });
+        }),
+      );
     } catch (e) {
       setUploadError(e instanceof Error ? e.message : "Upload failed");
     } finally {

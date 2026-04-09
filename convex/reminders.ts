@@ -67,11 +67,11 @@ export const getReminderContext = internalQuery({
   },
 });
 
-// ── Single user query (used by crons) ────────────────
+// ── All users query (used by crons) ────────────────
 
-export const getFirstUser = internalQuery({
+export const getAllUsers = internalQuery({
   args: {},
-  returns: v.union(
+  returns: v.array(
     v.object({
       _id: v.id("users"),
       telegramChatId: v.optional(v.string()),
@@ -79,18 +79,16 @@ export const getFirstUser = internalQuery({
       digestTime: v.optional(v.string()),
       lastDigestSentAt: v.optional(v.number()),
     }),
-    v.null(),
   ),
   handler: async (ctx) => {
-    const user = await ctx.db.query("users").first();
-    if (!user) return null;
-    return {
-      _id: user._id,
-      telegramChatId: user.telegramChatId,
-      timezone: user.timezone,
-      digestTime: user.digestTime,
-      lastDigestSentAt: user.lastDigestSentAt,
-    };
+    const users = await ctx.db.query("users").take(500);
+    return users.map((u) => ({
+      _id: u._id,
+      telegramChatId: u.telegramChatId,
+      timezone: u.timezone,
+      digestTime: u.digestTime,
+      lastDigestSentAt: u.lastDigestSentAt,
+    }));
   },
 });
 
@@ -208,24 +206,26 @@ export const checkOverdue = internalAction({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
-    const user = await ctx.runQuery(internal.reminders.getFirstUser);
-    if (!user) return null;
+    const users = await ctx.runQuery(internal.reminders.getAllUsers);
+    if (users.length === 0) return null;
 
     const now = Date.now();
-    const overdue = await ctx.runQuery(internal.reminders.getOverdueTasks, {
-      userId: user._id,
-      now,
-    });
-
-    if (overdue.length === 0) return null;
-
-    const message = `You have ${overdue.length} overdue task${overdue.length > 1 ? "s" : ""}`;
-
-    if (user.telegramChatId) {
-      await ctx.runAction(internal.telegram.sendTextMessage, {
-        chatId: user.telegramChatId,
-        text: message,
+    for (const user of users) {
+      const overdue = await ctx.runQuery(internal.reminders.getOverdueTasks, {
+        userId: user._id,
+        now,
       });
+
+      if (overdue.length === 0) continue;
+
+      const message = `You have ${overdue.length} overdue task${overdue.length > 1 ? "s" : ""}`;
+
+      if (user.telegramChatId) {
+        await ctx.runAction(internal.telegram.sendTextMessage, {
+          chatId: user.telegramChatId,
+          text: message,
+        });
+      }
     }
 
     return null;
@@ -236,71 +236,71 @@ export const checkDigest = internalAction({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
-    const user = await ctx.runQuery(internal.reminders.getFirstUser);
-    if (!user || !user.digestTime) return null;
+    const users = await ctx.runQuery(internal.reminders.getAllUsers);
 
-    // Dedup: skip if sent within last 20 hours
-    if (user.lastDigestSentAt && Date.now() - user.lastDigestSentAt < 20 * 60 * 60 * 1000) {
-      return null;
-    }
+    for (const user of users) {
+      if (!user.digestTime) continue;
 
-    // Compare in user's timezone using Intl.DateTimeFormat.formatToParts (reliable across runtimes)
-    const tz = user.timezone ?? "America/Chicago";
-    const now = new Date();
-    const fmt = new Intl.DateTimeFormat("en-US", {
-      timeZone: tz,
-      hour: "numeric",
-      minute: "numeric",
-      year: "numeric",
-      month: "numeric",
-      day: "numeric",
-      hour12: false,
-    });
-    const parts = fmt.formatToParts(now);
-    const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value ?? "0");
-    const nowHour = get("hour");
-    const nowMinute = get("minute");
+      // Dedup: skip if sent within last 20 hours
+      if (user.lastDigestSentAt && Date.now() - user.lastDigestSentAt < 20 * 60 * 60 * 1000) {
+        continue;
+      }
 
-    const [h, m] = user.digestTime.split(":").map(Number);
-    const digestMinutes = h * 60 + m;
-    const nowMinutes = nowHour * 60 + nowMinute;
+      // Compare in user's timezone using Intl.DateTimeFormat.formatToParts
+      const tz = user.timezone ?? "America/Chicago";
+      const now = new Date();
+      const fmt = new Intl.DateTimeFormat("en-US", {
+        timeZone: tz,
+        hour: "numeric",
+        minute: "numeric",
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+        hour12: false,
+      });
+      const parts = fmt.formatToParts(now);
+      const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value ?? "0");
+      const nowHour = get("hour");
+      const nowMinute = get("minute");
 
-    if (Math.abs(nowMinutes - digestMinutes) > 15) return null;
+      const [h, m] = user.digestTime.split(":").map(Number);
+      const digestMinutes = h * 60 + m;
+      const nowMinutes = nowHour * 60 + nowMinute;
 
-    // Compute today's start/end as UTC timestamps corresponding to midnight in user's tz.
-    // Elapsed local time since midnight = hours*3600 + minutes*60 + seconds (in ms).
-    // Since seconds/ms are timezone-invariant, we can derive midnight UTC from `now`.
-    const nowSecond = now.getUTCSeconds();
-    const elapsedMs = (nowHour * 3600 + nowMinute * 60 + nowSecond) * 1000 + now.getMilliseconds();
-    const todayStart = new Date(now.getTime() - elapsedMs);
-    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
+      if (Math.abs(nowMinutes - digestMinutes) > 15) continue;
 
-    const counts = await ctx.runQuery(internal.reminders.getDigestCounts, {
-      userId: user._id,
-      todayStart: todayStart.getTime(),
-      todayEnd: todayEnd.getTime(),
-    });
+      // Compute today's start/end as UTC timestamps corresponding to midnight in user's tz.
+      const nowSecond = now.getUTCSeconds();
+      const elapsedMs = (nowHour * 3600 + nowMinute * 60 + nowSecond) * 1000 + now.getMilliseconds();
+      const todayStart = new Date(now.getTime() - elapsedMs);
+      const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
 
-    if (counts.length === 0) return null;
+      const counts = await ctx.runQuery(internal.reminders.getDigestCounts, {
+        userId: user._id,
+        todayStart: todayStart.getTime(),
+        todayEnd: todayEnd.getTime(),
+      });
 
-    const lines = counts.map(
-      (c: { workstream: Workstream; total: number; high: number }) =>
-        `${c.workstream.charAt(0).toUpperCase() + c.workstream.slice(1)}: ${c.total} task${c.total > 1 ? "s" : ""}${c.high > 0 ? ` (${c.high} high priority)` : ""}`,
-    );
+      if (counts.length === 0) continue;
 
-    const message = `Good morning! Here's your day:\n${lines.join("\n")}`;
+      const lines = counts.map(
+        (c: { workstream: Workstream; total: number; high: number }) =>
+          `${c.workstream.charAt(0).toUpperCase() + c.workstream.slice(1)}: ${c.total} task${c.total > 1 ? "s" : ""}${c.high > 0 ? ` (${c.high} high priority)` : ""}`,
+      );
 
-    if (user.telegramChatId) {
-      await ctx.runAction(internal.telegram.sendTextMessage, {
-        chatId: user.telegramChatId,
-        text: message,
+      const message = `Good morning! Here's your day:\n${lines.join("\n")}`;
+
+      if (user.telegramChatId) {
+        await ctx.runAction(internal.telegram.sendTextMessage, {
+          chatId: user.telegramChatId,
+          text: message,
+        });
+      }
+
+      await ctx.runMutation(internal.reminders.markDigestSent, {
+        userId: user._id,
       });
     }
-
-    // Mark digest as sent today
-    await ctx.runMutation(internal.reminders.markDigestSent, {
-      userId: user._id,
-    });
 
     return null;
   },

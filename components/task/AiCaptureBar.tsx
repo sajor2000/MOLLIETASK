@@ -19,6 +19,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 interface AiCaptureBarProps {
   tasks: Doc<"tasks">[];
+  staffMembers?: Doc<"staffMembers">[];
   onAddTask: (prefill: Partial<TaskFormData>) => void;
   onEditTask: (task: Doc<"tasks">, changes: Partial<TaskFormData>) => void;
   onCompleteTask: (taskId: Id<"tasks">) => void;
@@ -26,6 +27,7 @@ interface AiCaptureBarProps {
 
 export function AiCaptureBar({
   tasks,
+  staffMembers = [],
   onAddTask,
   onEditTask,
   onCompleteTask,
@@ -56,6 +58,11 @@ export function AiCaptureBar({
       result.dueDate = fromDateInputValue(fields.dueDate);
     if (typeof fields.dueTime === "string") result.dueTime = fields.dueTime;
     if (typeof fields.notes === "string") result.notes = fields.notes;
+    if (typeof fields.assignedStaffIndex === "number") {
+      const sorted = [...staffMembers].sort((a, b) => a.sortOrder - b.sortOrder);
+      const staff = sorted[fields.assignedStaffIndex];
+      if (staff) result.assignedStaffId = staff._id;
+    }
     return result;
   }
 
@@ -75,10 +82,16 @@ export function AiCaptureBar({
         status: t.status,
         dueDateStr: t.dueDate ? toCSTDateString(t.dueDate) : undefined,
       }));
+      const sortedStaff = [...staffMembers].sort((a, b) => a.sortOrder - b.sortOrder);
+      const staffContext = sortedStaff.map((s, i) => ({
+        index: i,
+        name: s.name,
+        roleTitle: s.roleTitle,
+      }));
       const todayDate = toCSTDateString(Date.now());
 
       const result = await withTimeout(
-        parseIntent({ input: trimmed, taskContext, todayDate }),
+        parseIntent({ input: trimmed, taskContext, staffContext, todayDate }),
         5000,
       );
 
