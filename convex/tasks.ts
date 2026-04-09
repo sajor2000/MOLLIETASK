@@ -31,6 +31,8 @@ export const getTasksByStatus = query({
     scheduledReminderId: v.optional(v.id("_scheduled_functions")),
     completedAt: v.optional(v.number()),
     createdAt: v.number(),
+    subtaskTotal: v.optional(v.number()),
+    subtaskCompleted: v.optional(v.number()),
   })),
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
@@ -62,6 +64,8 @@ export const getTask = query({
       scheduledReminderId: v.optional(v.id("_scheduled_functions")),
       completedAt: v.optional(v.number()),
       createdAt: v.number(),
+      subtaskTotal: v.optional(v.number()),
+      subtaskCompleted: v.optional(v.number()),
     }),
     v.null(),
   ),
@@ -198,6 +202,17 @@ export const deleteTask = mutation({
       await ctx.scheduler.cancel(task.scheduledReminderId);
     }
 
+    // Cascade-delete subtasks
+    const subtasks = await ctx.db
+      .query("subtasks")
+      .withIndex("by_parentTaskId_and_sortOrder", (q) =>
+        q.eq("parentTaskId", taskId),
+      )
+      .take(50);
+    for (const subtask of subtasks) {
+      await ctx.db.delete(subtask._id);
+    }
+
     await ctx.db.delete(taskId);
     return null;
   },
@@ -214,6 +229,17 @@ export const completeTask = mutation({
     const task = await ctx.db.get(taskId);
     if (!task || task.userId !== userId) {
       throw new Error("Task not found");
+    }
+
+    // Block completion if subtasks are incomplete
+    const subtasks = await ctx.db
+      .query("subtasks")
+      .withIndex("by_parentTaskId_and_sortOrder", (q) =>
+        q.eq("parentTaskId", taskId),
+      )
+      .take(50);
+    if (subtasks.length > 0 && subtasks.some((s) => !s.isComplete)) {
+      throw new Error("All subtasks must be completed first");
     }
 
     if (task.scheduledReminderId) {
@@ -241,6 +267,21 @@ export const completeTask = mutation({
         sortOrder: task.sortOrder,
         createdAt: Date.now(),
       });
+
+      // Clone subtasks to the new recurring instance (all unchecked)
+      if (subtasks.length > 0) {
+        for (const subtask of subtasks) {
+          await ctx.db.insert("subtasks", {
+            parentTaskId: nextTaskId,
+            userId: task.userId,
+            title: subtask.title,
+            isComplete: false,
+            sortOrder: subtask.sortOrder,
+            createdAt: Date.now(),
+          });
+        }
+      }
+
       return nextTaskId;
     }
 
@@ -251,9 +292,10 @@ export const completeTask = mutation({
 export const uncompleteTask = mutation({
   args: {
     taskId: v.id("tasks"),
+    previousStatus: v.optional(statusValidator),
   },
   returns: v.null(),
-  handler: async (ctx, { taskId }) => {
+  handler: async (ctx, { taskId, previousStatus }) => {
     const userId = await getAuthUserId(ctx);
 
     const task = await ctx.db.get(taskId);
@@ -262,7 +304,7 @@ export const uncompleteTask = mutation({
     }
 
     await ctx.db.patch(taskId, {
-      status: "todo",
+      status: previousStatus ?? "todo",
       completedAt: undefined,
     });
 
@@ -283,6 +325,19 @@ export const reorderTask = mutation({
     const task = await ctx.db.get(taskId);
     if (!task || task.userId !== userId) {
       throw new Error("Task not found");
+    }
+
+    // Block drag-to-done if subtasks are incomplete
+    if (newStatus === "done" && task.status !== "done") {
+      const subtasks = await ctx.db
+        .query("subtasks")
+        .withIndex("by_parentTaskId_and_sortOrder", (q) =>
+          q.eq("parentTaskId", taskId),
+        )
+        .take(50);
+      if (subtasks.length > 0 && subtasks.some((s) => !s.isComplete)) {
+        throw new Error("All subtasks must be completed first");
+      }
     }
 
     await ctx.db.patch(taskId, {
@@ -309,6 +364,16 @@ export const deleteCompletedTasks = mutation({
 
     const batch = completed.slice(0, 100);
     for (const task of batch) {
+      // Cascade-delete subtasks
+      const subtasks = await ctx.db
+        .query("subtasks")
+        .withIndex("by_parentTaskId_and_sortOrder", (q) =>
+          q.eq("parentTaskId", task._id),
+        )
+        .take(50);
+      for (const subtask of subtasks) {
+        await ctx.db.delete(subtask._id);
+      }
       await ctx.db.delete(task._id);
     }
 

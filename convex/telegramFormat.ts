@@ -1,5 +1,7 @@
 // Pure formatting helpers for Telegram messages — no Convex decorators.
 
+const DEFAULT_TZ = "America/Chicago";
+
 type TaskForDisplay = {
   _id: string;
   title: string;
@@ -49,8 +51,8 @@ export function formatTaskList(tasks: TaskForDisplay[]): string {
 function formatDue(dueDate?: number, dueTime?: string): string {
   if (!dueDate) return "";
   const d = new Date(dueDate);
-  const month = d.toLocaleString("en-US", { month: "short" });
-  const day = d.getDate();
+  const month = d.toLocaleString("en-US", { month: "short", timeZone: DEFAULT_TZ });
+  const day = d.toLocaleString("en-US", { day: "numeric", timeZone: DEFAULT_TZ });
   const time = dueTime ? ` ${dueTime}` : "";
   return ` \u00b7 ${month} ${day}${time}`;
 }
@@ -70,8 +72,14 @@ export function formatSnoozeConfirmation(title: string, newReminderAt: number): 
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
+    timeZone: DEFAULT_TZ,
   });
   return `\u23f0 Snoozed: ${title} \u2014 reminder at ${time}`;
+}
+
+export function formatEditConfirmation(title: string, changes: string[]): string {
+  const changeSummary = changes.length > 0 ? changes.join(", ") : "no changes";
+  return `\u270f\ufe0f Updated: ${title} (${changeSummary})`;
 }
 
 export const HELP_TEXT = `Available commands:
@@ -79,4 +87,9 @@ export const HELP_TEXT = `Available commands:
 /tasks \u2014 List your current tasks
 /done 3 \u2014 Complete task #3 from list
 /done Buy supplies \u2014 Complete task by name
-/help \u2014 Show this help`;
+/edit 3 change priority to high \u2014 Edit task #3
+/help \u2014 Show this help
+
+You can also type naturally:
+"Call insurance company tomorrow" \u2014 AI adds task with due date
+"Mark buy supplies done" \u2014 AI completes matching task`;

@@ -244,21 +244,35 @@ export const checkDigest = internalAction({
       return null;
     }
 
-    // Compare in user's timezone
+    // Compare in user's timezone using Intl.DateTimeFormat.formatToParts (reliable across runtimes)
+    const tz = user.timezone ?? "America/Chicago";
     const now = new Date();
-    const userNow = new Date(
-      now.toLocaleString("en-US", { timeZone: user.timezone }),
-    );
+    const fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      hour: "numeric",
+      minute: "numeric",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour12: false,
+    });
+    const parts = fmt.formatToParts(now);
+    const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value ?? "0");
+    const nowHour = get("hour");
+    const nowMinute = get("minute");
+
     const [h, m] = user.digestTime.split(":").map(Number);
     const digestMinutes = h * 60 + m;
-    const nowMinutes = userNow.getHours() * 60 + userNow.getMinutes();
+    const nowMinutes = nowHour * 60 + nowMinute;
 
     if (Math.abs(nowMinutes - digestMinutes) > 15) return null;
 
-    const todayStart = new Date(userNow);
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date(userNow);
-    todayEnd.setHours(23, 59, 59, 999);
+    // Build today's start/end in user timezone using parsed parts
+    const userYear = get("year");
+    const userMonth = get("month");
+    const userDay = get("day");
+    const todayStart = new Date(`${userYear}-${String(userMonth).padStart(2, "0")}-${String(userDay).padStart(2, "0")}T00:00:00`);
+    const todayEnd = new Date(`${userYear}-${String(userMonth).padStart(2, "0")}-${String(userDay).padStart(2, "0")}T23:59:59.999`);
 
     const counts = await ctx.runQuery(internal.reminders.getDigestCounts, {
       userId: user._id,
@@ -269,7 +283,7 @@ export const checkDigest = internalAction({
     if (counts.length === 0) return null;
 
     const lines = counts.map(
-      (c) =>
+      (c: { workstream: Workstream; total: number; high: number }) =>
         `${c.workstream.charAt(0).toUpperCase() + c.workstream.slice(1)}: ${c.total} task${c.total > 1 ? "s" : ""}${c.high > 0 ? ` (${c.high} high priority)` : ""}`,
     );
 

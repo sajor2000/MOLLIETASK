@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, memo } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -16,17 +16,22 @@ import {
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { KanbanColumn } from "./KanbanColumn";
 import { TaskCard } from "./TaskCard";
-import type { Doc } from "@/convex/_generated/dataModel";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { COLUMN_ORDER, TaskStatus } from "@/lib/constants";
+
+const SORT_ORDER_GAP = 1000;
+const SORT_ORDER_BEFORE_FIRST_OFFSET = 500;
+
+const noop = () => {};
 
 interface KanbanBoardProps {
   tasks: Doc<"tasks">[];
-  onMoveTask: (taskId: string, newStatus: TaskStatus, newSortOrder: number) => void;
+  onMoveTask: (taskId: Id<"tasks">, newStatus: TaskStatus, newSortOrder: number) => void;
   onEditTask: (task: Doc<"tasks">) => void;
-  onCompleteTask: (taskId: string) => void;
+  onCompleteTask: (taskId: Id<"tasks">) => void;
 }
 
-export function KanbanBoard({
+export const KanbanBoard = memo(function KanbanBoard({
   tasks,
   onMoveTask,
   onEditTask,
@@ -59,21 +64,26 @@ export function KanbanBoard({
     return grouped;
   }, [tasks]);
 
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
-  };
+  const taskMap = useMemo(
+    () => new Map(tasks.map((t) => [t._id as string, t])),
+    [tasks],
+  );
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveId(String(event.active.id));
+  }, []);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
     setActiveId(null);
     const { active, over } = event;
 
     if (!over) return;
 
-    const activeTask = tasks.find((t) => t._id === active.id);
+    const activeTask = taskMap.get(String(active.id));
     if (!activeTask) return;
 
     let targetStatus: TaskStatus;
-    const overTask = tasks.find((t) => t._id === over.id);
+    const overTask = taskMap.get(String(over.id));
 
     if (overTask) {
       targetStatus = overTask.status;
@@ -91,15 +101,15 @@ export function KanbanBoard({
     if (overTask && overTask._id !== activeTask._id) {
       const overIndex = targetTasks.findIndex((t) => t._id === overTask._id);
       if (overIndex === 0) {
-        newSortOrder = overTask.sortOrder - 500;
+        newSortOrder = overTask.sortOrder - SORT_ORDER_BEFORE_FIRST_OFFSET;
       } else {
         const prevTask = targetTasks[overIndex - 1];
         newSortOrder = (prevTask.sortOrder + overTask.sortOrder) / 2;
       }
     } else if (targetTasks.length === 0) {
-      newSortOrder = 1000;
+      newSortOrder = SORT_ORDER_GAP;
     } else {
-      newSortOrder = targetTasks[targetTasks.length - 1].sortOrder + 1000;
+      newSortOrder = targetTasks[targetTasks.length - 1].sortOrder + SORT_ORDER_GAP;
     }
 
     if (
@@ -108,11 +118,9 @@ export function KanbanBoard({
     ) {
       onMoveTask(activeTask._id, targetStatus, newSortOrder);
     }
-  };
+  }, [taskMap, tasksByStatus, onMoveTask]);
 
-  const activeTask = activeId
-    ? tasks.find((t) => t._id === activeId)
-    : null;
+  const activeTask = activeId ? taskMap.get(activeId) ?? null : null;
 
   return (
     <DndContext
@@ -138,12 +146,12 @@ export function KanbanBoard({
           <div className="rotate-[2deg] scale-[1.02]">
             <TaskCard
               task={activeTask}
-              onEdit={() => {}}
-              onComplete={() => {}}
+              onEdit={noop}
+              onComplete={noop}
             />
           </div>
         ) : null}
       </DragOverlay>
     </DndContext>
   );
-}
+});

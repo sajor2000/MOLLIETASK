@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const { signIn } = useAuthActions();
-  const [flow, setFlow] = useState<"signIn" | "signUp">("signIn");
+  const flow = "signIn" as const;
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -24,11 +24,7 @@ export default function LoginPage() {
       router.push("/");
       router.refresh();
     } catch {
-      setError(
-        flow === "signIn"
-          ? "Invalid email or password"
-          : "Could not create account",
-      );
+      setError("Invalid email or password");
     } finally {
       setLoading(false);
     }
@@ -42,9 +38,7 @@ export default function LoginPage() {
             Dental Task OS
           </h1>
           <p className="text-[13px] text-text-muted mt-1">
-            {flow === "signIn"
-              ? "Sign in to continue"
-              : "Create your account"}
+            Sign in to continue
           </p>
         </div>
 
@@ -76,22 +70,9 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full bg-accent text-bg-base py-3 rounded-[4px] text-[14px] font-medium hover:opacity-90 transition-opacity duration-200 disabled:opacity-50"
           >
-            {loading
-              ? "Please wait..."
-              : flow === "signIn"
-                ? "Sign in"
-                : "Sign up"}
+            {loading ? "Please wait..." : "Sign in"}
           </button>
 
-          <button
-            type="button"
-            onClick={() => setFlow(flow === "signIn" ? "signUp" : "signIn")}
-            className="w-full text-[13px] text-text-muted hover:text-text-secondary transition-colors duration-200"
-          >
-            {flow === "signIn"
-              ? "Need an account? Sign up"
-              : "Already have an account? Sign in"}
-          </button>
         </div>
       </form>
     </div>

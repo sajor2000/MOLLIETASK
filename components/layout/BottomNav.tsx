@@ -20,7 +20,7 @@ export function BottomNav() {
           <Link
             key={item.href}
             href={item.href}
-            className={`flex flex-col items-center justify-center gap-0.5 px-4 py-1 rounded-[4px] transition-all duration-200 ${
+            className={`flex flex-col items-center justify-center gap-0.5 px-4 py-1 rounded-[4px] transition-colors duration-200 ${
               isActive
                 ? "text-accent bg-surface-elevated scale-95"
                 : "text-text-secondary hover:text-accent"

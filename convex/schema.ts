@@ -42,9 +42,6 @@ export default defineSchema({
     isAnonymous: v.optional(v.boolean()),
     // App-specific fields
     createdAt: v.optional(v.number()),
-    // Legacy fields — kept for backward compatibility with existing data
-    passwordHash: v.optional(v.string()),
-    sessionToken: v.optional(v.string()),
     timezone: v.optional(v.string()),
     digestTime: v.optional(v.string()),
     telegramChatId: v.optional(v.string()),
@@ -55,7 +52,8 @@ export default defineSchema({
   })
     .index("email", ["email"])
     .index("phone", ["phone"])
-    .index("by_telegramChatId", ["telegramChatId"]),
+    .index("by_telegramChatId", ["telegramChatId"])
+    .index("by_telegramLinkToken", ["telegramLinkToken"]),
 
   tasks: defineTable({
     userId: v.id("users"),
@@ -73,9 +71,21 @@ export default defineSchema({
     scheduledReminderId: v.optional(v.id("_scheduled_functions")),
     completedAt: v.optional(v.number()),
     createdAt: v.number(),
+    subtaskTotal: v.optional(v.number()),
+    subtaskCompleted: v.optional(v.number()),
   })
     .index("by_userId_status_dueDate", ["userId", "status", "dueDate"])
     .index("by_userId_status_sortOrder", ["userId", "status", "sortOrder"]),
+
+  subtasks: defineTable({
+    parentTaskId: v.id("tasks"),
+    userId: v.id("users"),
+    title: v.string(),
+    isComplete: v.boolean(),
+    sortOrder: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_parentTaskId_and_sortOrder", ["parentTaskId", "sortOrder"]),
 
   pushSubscriptions: defineTable({
     userId: v.id("users"),
@@ -88,4 +98,11 @@ export default defineSchema({
   })
     .index("by_userId", ["userId"])
     .index("by_userId_endpoint", ["userId", "endpoint"]),
+
+  rateLimits: defineTable({
+    userId: v.id("users"),
+    action: v.string(),
+    timestamp: v.number(),
+  })
+    .index("by_userId_action", ["userId", "action", "timestamp"]),
 });

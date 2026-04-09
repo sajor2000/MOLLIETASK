@@ -1,39 +1,38 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { TaskForm } from "./TaskForm";
+import { SubtaskList } from "./SubtaskList";
 import { Icon } from "@/components/ui/Icon";
 import type { Doc } from "@/convex/_generated/dataModel";
+import type { TaskFormData } from "@/lib/constants";
 
 interface TaskDetailViewProps {
   task?: Doc<"tasks"> | null;
-  onSave: (data: {
-    title: string;
-    workstream: "practice" | "personal" | "family";
-    priority: "high" | "normal";
-    status: "todo" | "inprogress" | "done";
-    dueDate?: number;
-    dueTime?: string;
-    notes?: string;
-  }) => void;
+  prefill?: Partial<TaskFormData>;
+  onSave: (data: TaskFormData) => void;
   onDelete?: () => void;
   onClose: () => void;
 }
 
 export function TaskDetailView({
   task,
+  prefill,
   onSave,
   onDelete,
   onClose,
 }: TaskDetailViewProps) {
-  // Close on Escape
+  // Use ref to avoid re-attaching listener when onClose changes
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  }, []);
 
   // Prevent body scroll when modal is open
   useEffect(() => {
@@ -47,12 +46,12 @@ export function TaskDetailView({
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40 bg-bg-base/60 backdrop-blur-sm"
+        className="fixed inset-0 z-[60] bg-bg-base/60 backdrop-blur-sm"
         onClick={onClose}
       />
 
       {/* Responsive container: bottom sheet on mobile, centered modal on desktop */}
-      <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-6">
+      <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-6">
         <div
           className="bg-surface-elevated border-t border-x md:border border-border rounded-t-[8px] md:rounded-[4px] w-full md:max-w-[480px] max-h-[85vh] md:max-h-[80vh] flex flex-col animate-[slideUp_200ms_ease-out] md:animate-[fadeIn_150ms_ease-out]"
           role="dialog"
@@ -78,11 +77,15 @@ export function TaskDetailView({
           </div>
 
           <TaskForm
+            key={task?._id ?? "new"}
             task={task}
+            prefill={prefill}
             onSave={onSave}
             onDelete={onDelete}
             onClose={onClose}
-          />
+          >
+            {task?._id && <SubtaskList parentTaskId={task._id} />}
+          </TaskForm>
         </div>
       </div>
     </>

@@ -1,15 +1,16 @@
 "use client";
 
-import Link from "next/link";
+import { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { NAV_ITEMS } from "@/lib/constants";
 import { Icon } from "@/components/ui/Icon";
 
 interface TopBarProps {
   onAddTask?: () => void;
+  topBarExtra?: ReactNode;
 }
 
-export function TopBar({ onAddTask }: TopBarProps) {
+export function TopBar({ onAddTask, topBarExtra }: TopBarProps) {
   const pathname = usePathname();
 
   const currentPage = NAV_ITEMS.find((item) =>
@@ -32,33 +33,19 @@ export function TopBar({ onAddTask }: TopBarProps) {
       </div>
 
       <div className="flex items-center gap-4">
-        <div className="hidden md:flex relative">
-          <Icon
-            name="search"
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted"
-          />
-          <input
-            type="text"
-            readOnly
-            placeholder="Search tasks..."
-            className="bg-bg-base border border-outline-variant/10 rounded-[4px] pl-9 pr-4 py-1.5 text-[12px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 w-48"
-          />
-        </div>
+        {topBarExtra && (
+          <div className="hidden md:flex">{topBarExtra}</div>
+        )}
 
-        <Link
-          href="/settings"
-          className="hidden md:flex text-text-muted hover:text-accent transition-colors duration-200"
-        >
-          <Icon name="settings" className="w-5 h-5" />
-        </Link>
-
-        <button
-          onClick={onAddTask}
-          className="flex items-center gap-1.5 px-4 py-1.5 bg-accent text-bg-base text-[12px] font-medium rounded-[4px] hover:opacity-90 transition-opacity duration-200"
-        >
-          <Icon name="add" className="w-[18px] h-[18px]" />
-          <span className="hidden sm:inline">Add Task</span>
-        </button>
+        {onAddTask && (
+          <button
+            onClick={onAddTask}
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-accent text-bg-base text-[12px] font-medium rounded-[4px] hover:opacity-90 transition-opacity duration-200"
+          >
+            <Icon name="add" className="w-[18px] h-[18px]" />
+            <span className="hidden sm:inline">Add Task</span>
+          </button>
+        )}
       </div>
     </header>
   );

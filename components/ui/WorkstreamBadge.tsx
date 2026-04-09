@@ -1,10 +1,11 @@
+import { memo } from "react";
 import { Workstream, WORKSTREAM_CONFIG } from "@/lib/constants";
 
 interface WorkstreamBadgeProps {
   workstream: Workstream;
 }
 
-export function WorkstreamBadge({ workstream }: WorkstreamBadgeProps) {
+export const WorkstreamBadge = memo(function WorkstreamBadge({ workstream }: WorkstreamBadgeProps) {
   const config = WORKSTREAM_CONFIG[workstream];
   return (
     <span
@@ -13,4 +14,4 @@ export function WorkstreamBadge({ workstream }: WorkstreamBadgeProps) {
       {config.label}
     </span>
   );
-}
+});

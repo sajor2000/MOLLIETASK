@@ -1,7 +1,12 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { workstreamValidator, priorityValidator, statusValidator } from "./schema";
+import {
+  workstreamValidator,
+  priorityValidator,
+  statusValidator,
+  recurringValidator,
+} from "./schema";
 import { computeNextDueDate } from "./tasks";
 
 // ── Queries ─────────────────────────────────────────
@@ -77,10 +82,16 @@ export const addTaskFromTelegram = internalMutation({
     title: v.string(),
     workstream: workstreamValidator,
     priority: priorityValidator,
+    dueDate: v.optional(v.number()),
+    dueTime: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    recurring: v.optional(recurringValidator),
   },
   returns: v.id("tasks"),
-  handler: async (ctx, { userId, title, workstream, priority }) => {
+  handler: async (ctx, { userId, title, workstream, priority, ...optional }) => {
     if (title.length > 200) throw new Error("Title max 200 characters");
+    if (optional.dueTime && !/^\d{2}:\d{2}$/.test(optional.dueTime))
+      throw new Error("dueTime must be HH:MM");
 
     const existing = await ctx.db
       .query("tasks")
@@ -100,10 +111,74 @@ export const addTaskFromTelegram = internalMutation({
       status: "todo",
       sortOrder,
       createdAt: Date.now(),
+      ...optional,
     });
 
     await ctx.db.patch(userId, { lastUsedWorkstream: workstream });
     return taskId;
+  },
+});
+
+export const editTaskFromTelegram = internalMutation({
+  args: {
+    userId: v.id("users"),
+    taskId: v.id("tasks"),
+    title: v.optional(v.string()),
+    workstream: v.optional(workstreamValidator),
+    priority: v.optional(priorityValidator),
+    dueDate: v.optional(v.number()),
+    dueTime: v.optional(v.string()),
+    notes: v.optional(v.string()),
+  },
+  returns: v.union(
+    v.object({ success: v.literal(false) }),
+    v.object({
+      success: v.literal(true),
+      title: v.string(),
+      changes: v.array(v.string()),
+    }),
+  ),
+  handler: async (ctx, { userId, taskId, ...updates }) => {
+    const task = await ctx.db.get(taskId);
+    if (!task || task.userId !== userId) {
+      return { success: false as const };
+    }
+
+    if (updates.title !== undefined && updates.title.length > 200)
+      throw new Error("Title max 200 characters");
+    if (updates.dueTime !== undefined && !/^\d{2}:\d{2}$/.test(updates.dueTime))
+      throw new Error("dueTime must be HH:MM");
+
+    const changes: string[] = [];
+    if (updates.title !== undefined) changes.push(`title → "${updates.title}"`);
+    if (updates.workstream !== undefined) changes.push(`workstream → ${updates.workstream}`);
+    if (updates.priority !== undefined) changes.push(`priority → ${updates.priority}`);
+    if (updates.dueDate !== undefined) {
+      const d = new Date(updates.dueDate);
+      changes.push(`due → ${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`);
+    }
+    if (updates.dueTime !== undefined) changes.push(`time → ${updates.dueTime}`);
+    if (updates.notes !== undefined) changes.push("notes updated");
+
+    // Filter out undefined values before patching
+    const patch: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(updates)) {
+      if (val !== undefined) patch[k] = val;
+    }
+
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(taskId, patch);
+    }
+
+    if (updates.workstream) {
+      await ctx.db.patch(userId, { lastUsedWorkstream: updates.workstream });
+    }
+
+    return {
+      success: true as const,
+      title: updates.title ?? task.title,
+      changes,
+    };
   },
 });
 
