@@ -41,6 +41,7 @@ export default defineSchema({
     phoneVerificationTime: v.optional(v.number()),
     isAnonymous: v.optional(v.boolean()),
     // App-specific fields
+    passwordHash: v.optional(v.string()),
     createdAt: v.optional(v.number()),
     timezone: v.optional(v.string()),
     digestTime: v.optional(v.string()),

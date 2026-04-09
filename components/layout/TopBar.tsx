@@ -1,17 +1,21 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { usePathname } from "next/navigation";
 import { NAV_ITEMS } from "@/lib/constants";
 import { Icon } from "@/components/ui/Icon";
+import { SearchInput } from "./SearchInput";
 
 interface TopBarProps {
   onAddTask?: () => void;
   topBarExtra?: ReactNode;
+  searchQuery?: string;
+  onSearchChange?: (value: string) => void;
 }
 
-export function TopBar({ onAddTask, topBarExtra }: TopBarProps) {
+export function TopBar({ onAddTask, topBarExtra, searchQuery, onSearchChange }: TopBarProps) {
   const pathname = usePathname();
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   const currentPage = NAV_ITEMS.find((item) =>
     item.href === "/" ? pathname === "/" : pathname.startsWith(item.href)
@@ -19,22 +23,55 @@ export function TopBar({ onAddTask, topBarExtra }: TopBarProps) {
 
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between h-16 px-8 bg-surface/80 backdrop-blur-md border-b border-border">
-      <div className="flex items-center gap-4">
-        {/* Mobile logo */}
-        <span className="md:hidden text-[15px] font-medium text-accent tracking-tight">
-          Dental Task OS
-        </span>
-        {/* Desktop page title */}
-        {currentPage && (
-          <h2 className="hidden md:block text-xl font-medium text-accent tracking-tight">
-            {currentPage.label}
-          </h2>
+      <div className="flex items-center gap-4 min-w-0">
+        {/* Mobile: search expanded replaces title */}
+        {mobileSearchOpen && onSearchChange ? (
+          <div className="flex md:hidden items-center gap-2 flex-1">
+            <SearchInput value={searchQuery ?? ""} onChange={onSearchChange} />
+            <button
+              onClick={() => { setMobileSearchOpen(false); onSearchChange(""); }}
+              className="text-text-muted text-[12px]"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Mobile logo */}
+            <span className="md:hidden text-[15px] font-medium text-accent tracking-tight">
+              Dental Task OS
+            </span>
+            {/* Desktop page title */}
+            {currentPage && (
+              <h2 className="hidden md:block text-xl font-medium text-accent tracking-tight">
+                {currentPage.label}
+              </h2>
+            )}
+          </>
         )}
       </div>
 
       <div className="flex items-center gap-4">
+        {/* Desktop search */}
+        {onSearchChange && (
+          <div className="hidden md:flex">
+            <SearchInput value={searchQuery ?? ""} onChange={onSearchChange} />
+          </div>
+        )}
+
         {topBarExtra && (
           <div className="hidden md:flex">{topBarExtra}</div>
+        )}
+
+        {/* Mobile search toggle */}
+        {onSearchChange && !mobileSearchOpen && (
+          <button
+            onClick={() => setMobileSearchOpen(true)}
+            className="md:hidden text-text-muted hover:text-text-secondary transition-colors"
+            aria-label="Search"
+          >
+            <Icon name="search" className="w-5 h-5" />
+          </button>
         )}
 
         {onAddTask && (

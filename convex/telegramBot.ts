@@ -18,6 +18,7 @@ export const getUserByChatId = internalQuery({
       _id: v.id("users"),
       telegramChatId: v.optional(v.string()),
       timezone: v.optional(v.string()),
+      digestTime: v.optional(v.string()),
       lastUsedWorkstream: v.optional(workstreamValidator),
     }),
     v.null(),
@@ -32,6 +33,7 @@ export const getUserByChatId = internalQuery({
       _id: user._id,
       telegramChatId: user.telegramChatId,
       timezone: user.timezone,
+      digestTime: user.digestTime,
       lastUsedWorkstream: user.lastUsedWorkstream,
     };
   },
@@ -283,6 +285,38 @@ export const snoozeTask = internalMutation({
     });
 
     return { success: true as const, title: task.title, newReminderAt };
+  },
+});
+
+export const updateSettingsFromTelegram = internalMutation({
+  args: {
+    userId: v.id("users"),
+    timezone: v.optional(v.string()),
+    digestTime: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, { userId, timezone, digestTime }) => {
+    if (timezone !== undefined) {
+      try {
+        Intl.DateTimeFormat(undefined, { timeZone: timezone });
+      } catch {
+        throw new Error("Invalid timezone");
+      }
+    }
+    if (digestTime !== undefined && digestTime !== "") {
+      if (!/^\d{2}:\d{2}$/.test(digestTime)) throw new Error("digestTime must be HH:MM");
+      const [h, m] = digestTime.split(":").map(Number);
+      if (h < 0 || h > 23 || m < 0 || m > 59) throw new Error("digestTime out of range");
+    }
+
+    const patch: Record<string, unknown> = {};
+    if (timezone !== undefined) patch.timezone = timezone;
+    if (digestTime !== undefined) patch.digestTime = digestTime || undefined;
+
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(userId, patch);
+    }
+    return null;
   },
 });
 

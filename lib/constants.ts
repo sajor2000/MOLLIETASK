@@ -6,11 +6,23 @@ export type Workstream = "practice" | "personal" | "family";
 export type TaskStatus = "todo" | "inprogress" | "done";
 export type Priority = "high" | "normal";
 
+export type Recurring = "daily" | "weekdays" | "weekly" | "monthly";
+
 export const NAV_ITEMS: ReadonlyArray<{ href: string; label: string; icon: IconName }> = [
   { href: "/", label: "Kanban", icon: "view_kanban" },
   { href: "/today", label: "Today", icon: "wb_sunny" },
   { href: "/calendar", label: "Calendar", icon: "calendar_today" },
+  { href: "/settings", label: "Settings", icon: "settings" },
 ];
+
+export const TIMEZONE_OPTIONS = [
+  { value: "America/New_York", label: "Eastern" },
+  { value: "America/Chicago", label: "Central" },
+  { value: "America/Denver", label: "Mountain" },
+  { value: "America/Los_Angeles", label: "Pacific" },
+  { value: "America/Anchorage", label: "Alaska" },
+  { value: "Pacific/Honolulu", label: "Hawaii" },
+] as const;
 
 export const WORKSTREAM_CONFIG: Record<
   Workstream,
@@ -52,5 +64,6 @@ export interface TaskFormData {
   status: TaskStatus;
   dueDate?: number;
   dueTime?: string;
+  recurring?: Recurring;
   notes?: string;
 }

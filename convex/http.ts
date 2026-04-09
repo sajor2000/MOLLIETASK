@@ -303,6 +303,67 @@ http.route({
       return new Response("OK", { status: 200 });
     }
 
+    // /timezone [value] — view or set timezone
+    if (text === "/timezone" || text.startsWith("/timezone ")) {
+      const arg = text.slice(10).trim();
+      if (!arg) {
+        const tz = user.timezone ?? "America/Chicago";
+        await reply(chatId, `Current timezone: ${tz}`);
+        return new Response("OK", { status: 200 });
+      }
+
+      const TZ_SHORTCUTS: Record<string, string> = {
+        eastern: "America/New_York",
+        central: "America/Chicago",
+        mountain: "America/Denver",
+        pacific: "America/Los_Angeles",
+        alaska: "America/Anchorage",
+        hawaii: "Pacific/Honolulu",
+      };
+      const resolved = TZ_SHORTCUTS[arg.toLowerCase()] ?? arg;
+
+      try {
+        await ctx.runMutation(internal.telegramBot.updateSettingsFromTelegram, {
+          userId: user._id,
+          timezone: resolved,
+        });
+        await reply(chatId, `\u2705 Timezone set to ${resolved}`);
+      } catch {
+        await reply(chatId, "Invalid timezone. Try: Eastern, Central, Mountain, Pacific, or a full IANA name.");
+      }
+      return new Response("OK", { status: 200 });
+    }
+
+    // /digest [HH:MM|off] — view or set daily digest time
+    if (text === "/digest" || text.startsWith("/digest ")) {
+      const arg = text.slice(8).trim();
+      if (!arg) {
+        const dt = user.digestTime;
+        await reply(chatId, dt ? `Daily digest at ${dt}` : "Daily digest is off.");
+        return new Response("OK", { status: 200 });
+      }
+
+      if (arg.toLowerCase() === "off") {
+        await ctx.runMutation(internal.telegramBot.updateSettingsFromTelegram, {
+          userId: user._id,
+          digestTime: "",
+        });
+        await reply(chatId, "\u2705 Daily digest disabled.");
+        return new Response("OK", { status: 200 });
+      }
+
+      try {
+        await ctx.runMutation(internal.telegramBot.updateSettingsFromTelegram, {
+          userId: user._id,
+          digestTime: arg,
+        });
+        await reply(chatId, `\u2705 Daily digest set to ${arg}`);
+      } catch {
+        await reply(chatId, "Invalid time. Use HH:MM format (e.g. 08:00).");
+      }
+      return new Response("OK", { status: 200 });
+    }
+
     // /help
     if (text === "/help") {
       await reply(chatId, HELP_TEXT);
@@ -349,6 +410,7 @@ http.route({
           ...(aiResult.fields.dueDate ? { dueDate: new Date(aiResult.fields.dueDate).getTime() } : {}),
           ...(aiResult.fields.dueTime ? { dueTime: aiResult.fields.dueTime } : {}),
           ...(aiResult.fields.notes ? { notes: aiResult.fields.notes } : {}),
+          ...(aiResult.fields.recurring ? { recurring: aiResult.fields.recurring } : {}),
         });
         await reply(chatId, formatTaskConfirmation("added", title, workstream));
       } else if (aiResult.intent === "complete" && aiResult.taskIndex !== undefined) {

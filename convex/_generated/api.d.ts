@@ -8,14 +8,15 @@
  * @module
  */
 
+import type * as ResendOTPPasswordReset from "../ResendOTPPasswordReset.js";
 import type * as aiActions from "../aiActions.js";
-import type * as aiSchemas from "../aiSchemas.js";
 import type * as auth from "../auth.js";
 import type * as authHelpers from "../authHelpers.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as pushActions from "../pushActions.js";
 import type * as pushNotifications from "../pushNotifications.js";
+import type * as rateLimit from "../rateLimit.js";
 import type * as reminders from "../reminders.js";
 import type * as subtasks from "../subtasks.js";
 import type * as tasks from "../tasks.js";
@@ -31,14 +32,15 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  ResendOTPPasswordReset: typeof ResendOTPPasswordReset;
   aiActions: typeof aiActions;
-  aiSchemas: typeof aiSchemas;
   auth: typeof auth;
   authHelpers: typeof authHelpers;
   crons: typeof crons;
   http: typeof http;
   pushActions: typeof pushActions;
   pushNotifications: typeof pushNotifications;
+  rateLimit: typeof rateLimit;
   reminders: typeof reminders;
   subtasks: typeof subtasks;
   tasks: typeof tasks;

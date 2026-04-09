@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { Doc } from "@/convex/_generated/dataModel";
-import type { Workstream, Priority, TaskStatus, TaskFormData } from "@/lib/constants";
+import type { Workstream, Priority, Recurring, TaskStatus, TaskFormData } from "@/lib/constants";
 import { WORKSTREAM_CONFIG } from "@/lib/constants";
 import { toDateInputValue, fromDateInputValue } from "@/lib/dates";
 
@@ -34,6 +34,9 @@ export function TaskForm({ task, prefill, onSave, onDelete, onClose, children }:
         : ""
   );
   const [dueTime, setDueTime] = useState(task?.dueTime ?? prefill?.dueTime ?? "");
+  const [recurring, setRecurring] = useState<Recurring | undefined>(
+    task?.recurring ?? prefill?.recurring ?? undefined
+  );
   const [notes, setNotes] = useState(task?.notes ?? prefill?.notes ?? "");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -48,6 +51,7 @@ export function TaskForm({ task, prefill, onSave, onDelete, onClose, children }:
       status,
       dueDate: dueDate ? fromDateInputValue(dueDate) : undefined,
       dueTime: dueTime || undefined,
+      recurring: dueDate ? recurring : undefined,
       notes: notes.trim() || undefined,
     });
   }
@@ -166,6 +170,31 @@ export function TaskForm({ task, prefill, onSave, onDelete, onClose, children }:
                 {label}
               </button>
             ))}
+          </div>
+        )}
+
+        {/* Recurring */}
+        {dueDate && (
+          <div>
+            <label className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
+              Repeat
+            </label>
+            <div className="flex gap-1 bg-bg-base rounded-[4px] p-1">
+              {([undefined, "daily", "weekdays", "weekly", "monthly"] as const).map((r) => (
+                <button
+                  key={r ?? "none"}
+                  type="button"
+                  onClick={() => setRecurring(r)}
+                  className={`flex-1 py-1.5 text-[12px] rounded-[4px] transition-all duration-200 ${
+                    recurring === r
+                      ? "bg-surface text-accent"
+                      : "text-text-muted hover:text-text-secondary"
+                  }`}
+                >
+                  {r ? r.charAt(0).toUpperCase() + r.slice(1) : "None"}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
