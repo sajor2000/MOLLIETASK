@@ -96,6 +96,19 @@ function buildEditPatch(fields: {
   };
 }
 
+/** Build staff context for AI parsing and resolve assignedStaffIndex to ID. */
+type StaffRow = { _id: Id<"staffMembers">; name: string; roleTitle: string; sortOrder: number };
+function buildStaffContext(staff: StaffRow[]) {
+  return staff.map((s, i) => ({ index: i, name: s.name, roleTitle: s.roleTitle }));
+}
+function resolveStaffId(
+  staff: StaffRow[],
+  assignedStaffIndex: number | null | undefined,
+): Id<"staffMembers"> | undefined {
+  if (typeof assignedStaffIndex !== "number") return undefined;
+  return staff[assignedStaffIndex]?._id;
+}
+
 /** Validate a Convex-style ID string (alphanumeric + underscore-like chars) */
 function isValidConvexId(id: string): boolean {
   return /^[a-z0-9][a-z0-9_]*$/i.test(id) && id.length > 0 && id.length < 64;
@@ -270,10 +283,12 @@ http.route({
 
       try {
         const today = new Date().toISOString().slice(0, 10);
+        const staff = await ctx.runQuery(internal.telegramBot.getStaffForTelegram, { userId: user._id });
         const aiResult = await ctx.runAction(internal.aiActions.parseTaskIntentInternal, {
           userId: user._id,
           input: rawInput,
           taskContext: [],
+          staffContext: buildStaffContext(staff),
           todayDate: today,
         });
 
@@ -281,6 +296,7 @@ http.route({
           const workstream = aiResult.fields.workstream ?? defaultWorkstream;
           const priority = aiResult.fields.priority ?? "normal";
           const title = (aiResult.fields.title ?? rawInput).slice(0, 200);
+          const assignedStaffId = resolveStaffId(staff, aiResult.fields.assignedStaffIndex);
 
           await ctx.runMutation(internal.telegramBot.addTaskFromTelegram, {
             userId: user._id,
@@ -291,6 +307,7 @@ http.route({
             ...(aiResult.fields.dueTime ? { dueTime: aiResult.fields.dueTime } : {}),
             ...(aiResult.fields.notes ? { notes: aiResult.fields.notes } : {}),
             ...(aiResult.fields.recurring ? { recurring: aiResult.fields.recurring } : {}),
+            ...(assignedStaffId ? { assignedStaffId } : {}),
           });
           await reply(chatId, formatTaskConfirmation("added", title, workstream));
         } else {
@@ -381,18 +398,22 @@ http.route({
 
       try {
         const today = new Date().toISOString().slice(0, 10);
+        const staff = await ctx.runQuery(internal.telegramBot.getStaffForTelegram, { userId: user._id });
         const aiResult = await ctx.runAction(internal.aiActions.parseTaskIntentInternal, {
           userId: user._id,
           input: `edit task ${taskNum}: ${changeText}`,
           taskContext: buildTaskContext(tasks),
+          staffContext: buildStaffContext(staff),
           todayDate: today,
         });
 
         if (aiResult.intent === "edit" && aiResult.fields) {
+          const assignedStaffId = resolveStaffId(staff, aiResult.fields.assignedStaffIndex);
           const result = await ctx.runMutation(internal.telegramBot.editTaskFromTelegram, {
             userId: user._id,
             taskId: targetTask._id as Id<"tasks">,
             ...buildEditPatch(aiResult.fields),
+            ...(assignedStaffId ? { assignedStaffId } : {}),
           });
 
           if (result.success) {
@@ -689,11 +710,13 @@ http.route({
       const tasks = await ctx.runQuery(internal.telegramBot.getTasksForTelegram, {
         userId: user._id,
       });
+      const staff = await ctx.runQuery(internal.telegramBot.getStaffForTelegram, { userId: user._id });
 
       const aiResult = await ctx.runAction(internal.aiActions.parseTaskIntentInternal, {
         userId: user._id,
         input: text,
         taskContext: buildTaskContext(tasks),
+        staffContext: buildStaffContext(staff),
         todayDate: today,
       });
 
@@ -701,6 +724,7 @@ http.route({
         const workstream = aiResult.fields.workstream ?? user.lastUsedWorkstream ?? "personal";
         const priority = aiResult.fields.priority ?? "normal";
         const title = (aiResult.fields.title ?? text).slice(0, 200);
+        const assignedStaffId = resolveStaffId(staff, aiResult.fields.assignedStaffIndex);
 
         await ctx.runMutation(internal.telegramBot.addTaskFromTelegram, {
           userId: user._id,
@@ -711,6 +735,7 @@ http.route({
           ...(aiResult.fields.dueTime ? { dueTime: aiResult.fields.dueTime } : {}),
           ...(aiResult.fields.notes ? { notes: aiResult.fields.notes } : {}),
           ...(aiResult.fields.recurring ? { recurring: aiResult.fields.recurring } : {}),
+          ...(assignedStaffId ? { assignedStaffId } : {}),
         });
         await reply(chatId, formatTaskConfirmation("added", title, workstream));
       } else if (aiResult.intent === "complete" && aiResult.taskIndex !== undefined) {
@@ -733,10 +758,12 @@ http.route({
       } else if (aiResult.intent === "edit" && aiResult.taskIndex !== undefined && aiResult.fields) {
         const target = tasks[aiResult.taskIndex];
         if (target) {
+          const assignedStaffId = resolveStaffId(staff, aiResult.fields.assignedStaffIndex);
           const result = await ctx.runMutation(internal.telegramBot.editTaskFromTelegram, {
             userId: user._id,
             taskId: target._id as Id<"tasks">,
             ...buildEditPatch(aiResult.fields),
+            ...(assignedStaffId ? { assignedStaffId } : {}),
           });
           if (result.success) {
             await reply(chatId, formatEditConfirmation(result.title, result.changes));

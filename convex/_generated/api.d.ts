@@ -18,6 +18,7 @@ import type * as pushActions from "../pushActions.js";
 import type * as pushNotifications from "../pushNotifications.js";
 import type * as rateLimit from "../rateLimit.js";
 import type * as reminders from "../reminders.js";
+import type * as secureToken from "../secureToken.js";
 import type * as staff from "../staff.js";
 import type * as subtasks from "../subtasks.js";
 import type * as taskAttachments from "../taskAttachments.js";
@@ -46,6 +47,7 @@ declare const fullApi: ApiFromModules<{
   pushNotifications: typeof pushNotifications;
   rateLimit: typeof rateLimit;
   reminders: typeof reminders;
+  secureToken: typeof secureToken;
   staff: typeof staff;
   subtasks: typeof subtasks;
   taskAttachments: typeof taskAttachments;

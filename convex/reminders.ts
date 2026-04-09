@@ -202,106 +202,117 @@ export const sendReminder = internalAction({
   },
 });
 
+/** Fan out: schedule one per-user action instead of sequential loop. */
 export const checkOverdue = internalAction({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
     const users = await ctx.runQuery(internal.reminders.getAllUsers);
-    if (users.length === 0) return null;
-
-    const now = Date.now();
     for (const user of users) {
-      const overdue = await ctx.runQuery(internal.reminders.getOverdueTasks, {
-        userId: user._id,
-        now,
-      });
-
-      if (overdue.length === 0) continue;
-
-      const message = `You have ${overdue.length} overdue task${overdue.length > 1 ? "s" : ""}`;
-
       if (user.telegramChatId) {
-        await ctx.runAction(internal.telegram.sendTextMessage, {
+        await ctx.scheduler.runAfter(0, internal.reminders.checkOverdueForUser, {
+          userId: user._id,
           chatId: user.telegramChatId,
-          text: message,
         });
       }
     }
-
     return null;
   },
 });
 
+export const checkOverdueForUser = internalAction({
+  args: { userId: v.id("users"), chatId: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { userId, chatId }) => {
+    const overdue = await ctx.runQuery(internal.reminders.getOverdueTasks, {
+      userId,
+      now: Date.now(),
+    });
+    if (overdue.length === 0) return null;
+
+    const message = `You have ${overdue.length} overdue task${overdue.length > 1 ? "s" : ""}`;
+    await ctx.runAction(internal.telegram.sendTextMessage, {
+      chatId,
+      text: message,
+    });
+    return null;
+  },
+});
+
+/** Fan out: schedule one per-user action for digest-eligible users. */
 export const checkDigest = internalAction({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
     const users = await ctx.runQuery(internal.reminders.getAllUsers);
+    const now = Date.now();
 
     for (const user of users) {
-      if (!user.digestTime) continue;
+      if (!user.digestTime || !user.telegramChatId) continue;
+      if (user.lastDigestSentAt && now - user.lastDigestSentAt < 20 * 60 * 60 * 1000) continue;
 
-      // Dedup: skip if sent within last 20 hours
-      if (user.lastDigestSentAt && Date.now() - user.lastDigestSentAt < 20 * 60 * 60 * 1000) {
-        continue;
-      }
-
-      // Compare in user's timezone using Intl.DateTimeFormat.formatToParts
-      const tz = user.timezone ?? "America/Chicago";
-      const now = new Date();
-      const fmt = new Intl.DateTimeFormat("en-US", {
-        timeZone: tz,
-        hour: "numeric",
-        minute: "numeric",
-        year: "numeric",
-        month: "numeric",
-        day: "numeric",
-        hour12: false,
-      });
-      const parts = fmt.formatToParts(now);
-      const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value ?? "0");
-      const nowHour = get("hour");
-      const nowMinute = get("minute");
-
-      const [h, m] = user.digestTime.split(":").map(Number);
-      const digestMinutes = h * 60 + m;
-      const nowMinutes = nowHour * 60 + nowMinute;
-
-      if (Math.abs(nowMinutes - digestMinutes) > 15) continue;
-
-      // Compute today's start/end as UTC timestamps corresponding to midnight in user's tz.
-      const nowSecond = now.getUTCSeconds();
-      const elapsedMs = (nowHour * 3600 + nowMinute * 60 + nowSecond) * 1000 + now.getMilliseconds();
-      const todayStart = new Date(now.getTime() - elapsedMs);
-      const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
-
-      const counts = await ctx.runQuery(internal.reminders.getDigestCounts, {
+      await ctx.scheduler.runAfter(0, internal.reminders.checkDigestForUser, {
         userId: user._id,
-        todayStart: todayStart.getTime(),
-        todayEnd: todayEnd.getTime(),
-      });
-
-      if (counts.length === 0) continue;
-
-      const lines = counts.map(
-        (c: { workstream: Workstream; total: number; high: number }) =>
-          `${c.workstream.charAt(0).toUpperCase() + c.workstream.slice(1)}: ${c.total} task${c.total > 1 ? "s" : ""}${c.high > 0 ? ` (${c.high} high priority)` : ""}`,
-      );
-
-      const message = `Good morning! Here's your day:\n${lines.join("\n")}`;
-
-      if (user.telegramChatId) {
-        await ctx.runAction(internal.telegram.sendTextMessage, {
-          chatId: user.telegramChatId,
-          text: message,
-        });
-      }
-
-      await ctx.runMutation(internal.reminders.markDigestSent, {
-        userId: user._id,
+        chatId: user.telegramChatId,
+        timezone: user.timezone ?? "America/Chicago",
+        digestTime: user.digestTime,
       });
     }
+    return null;
+  },
+});
 
+export const checkDigestForUser = internalAction({
+  args: {
+    userId: v.id("users"),
+    chatId: v.string(),
+    timezone: v.string(),
+    digestTime: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, { userId, chatId, timezone, digestTime }) => {
+    const now = new Date();
+    const fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      hour: "numeric",
+      minute: "numeric",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour12: false,
+    });
+    const parts = fmt.formatToParts(now);
+    const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value ?? "0");
+    const nowHour = get("hour");
+    const nowMinute = get("minute");
+
+    const [h, m] = digestTime.split(":").map(Number);
+    if (Math.abs(nowHour * 60 + nowMinute - (h * 60 + m)) > 15) return null;
+
+    const nowSecond = now.getUTCSeconds();
+    const elapsedMs = (nowHour * 3600 + nowMinute * 60 + nowSecond) * 1000 + now.getMilliseconds();
+    const todayStart = new Date(now.getTime() - elapsedMs);
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
+
+    const counts = await ctx.runQuery(internal.reminders.getDigestCounts, {
+      userId,
+      todayStart: todayStart.getTime(),
+      todayEnd: todayEnd.getTime(),
+    });
+
+    if (counts.length === 0) return null;
+
+    const lines = counts.map(
+      (c: { workstream: Workstream; total: number; high: number }) =>
+        `${c.workstream.charAt(0).toUpperCase() + c.workstream.slice(1)}: ${c.total} task${c.total > 1 ? "s" : ""}${c.high > 0 ? ` (${c.high} high priority)` : ""}`,
+    );
+
+    await ctx.runAction(internal.telegram.sendTextMessage, {
+      chatId,
+      text: `Good morning! Here's your day:\n${lines.join("\n")}`,
+    });
+
+    await ctx.runMutation(internal.reminders.markDigestSent, { userId });
     return null;
   },
 });

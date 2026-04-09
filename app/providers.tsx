@@ -24,15 +24,28 @@ const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 function StoreUser({ children }: { children: ReactNode }) {
   const storeUser = useMutation(api.users.store);
   const [ready, setReady] = useState(false);
+  const retries = useRef(0);
 
   useEffect(() => {
-    storeUser()
-      .then(() => setReady(true))
-      .catch((err) => {
-        console.error("Failed to store user:", err);
-        // Still render children so the app is usable even if store fails
-        setReady(true);
-      });
+    let cancelled = false;
+
+    async function attempt() {
+      try {
+        await storeUser();
+        if (!cancelled) setReady(true);
+      } catch (err) {
+        if (retries.current < 2 && !cancelled) {
+          retries.current++;
+          setTimeout(attempt, 1000 * retries.current);
+        } else {
+          console.error("Failed to store user after retries:", err);
+          if (!cancelled) setReady(true);
+        }
+      }
+    }
+
+    attempt();
+    return () => { cancelled = true; };
   }, [storeUser]);
 
   if (!ready) return null;

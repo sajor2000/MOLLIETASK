@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import { AppShell } from "@/components/layout/AppShell";
@@ -12,7 +12,7 @@ import { TIMEZONE_OPTIONS } from "@/lib/constants";
 export default function SettingsPage() {
   const user = useQuery(api.users.getMe);
   const updateSettings = useMutation(api.users.updateSettings);
-  const generateToken = useMutation(api.users.generateTelegramLinkToken);
+  const generateToken = useAction(api.secureToken.generateTelegramLinkToken);
   const unlinkTelegram = useMutation(api.users.unlinkTelegram);
   const deleteAccount = useMutation(api.users.deleteAccount);
   const router = useRouter();

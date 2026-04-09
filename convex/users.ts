@@ -1,9 +1,10 @@
 import { v } from "convex/values";
-import { query, mutation, internalMutation } from "./_generated/server";
+import { query, mutation, internalMutation, MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { workstreamValidator } from "./schema";
 import { getAuthUserId, storeUser } from "./authHelpers";
-import { deleteTaskAttachments } from "./tasks";
+import { deleteTaskCascade } from "./tasks";
 import { validateTimezone, validateDigestTime } from "./validation";
 
 export const getMe = query({
@@ -62,29 +63,21 @@ export const updateSettings = mutation({
   },
 });
 
-export const generateTelegramLinkToken = mutation({
-  args: {},
-  returns: v.string(),
-  handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-
-    // Convex runtime seeds Math.random() per invocation for determinism.
-    // Using it with a large character set + 32 chars gives sufficient entropy
-    // for a short-lived 10-minute linking token.
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    let token = "";
-    for (let i = 0; i < 32; i++) {
-      token += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-
-    const expiry = Date.now() + 10 * 60 * 1000; // 10 minutes
-
+// Token generation moved to convex/secureToken.ts (Node action with crypto.randomBytes).
+// This internal mutation stores the token — called from the action.
+export const storeTelegramLinkToken = internalMutation({
+  args: {
+    userId: v.id("users"),
+    token: v.string(),
+    expiry: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, { userId, token, expiry }) => {
     await ctx.db.patch(userId, {
       telegramLinkToken: token,
       telegramLinkExpiry: expiry,
     });
-
-    return token;
+    return null;
   },
 });
 
@@ -141,21 +134,7 @@ export const deleteAccount = mutation({
       .take(200);
 
     for (const task of tasks) {
-      if (task.scheduledReminderId) {
-        await ctx.scheduler.cancel(task.scheduledReminderId);
-      }
-      // Cascade-delete subtasks
-      const subtasks = await ctx.db
-        .query("subtasks")
-        .withIndex("by_parentTaskId_and_sortOrder", (q) =>
-          q.eq("parentTaskId", task._id),
-        )
-        .take(50);
-      for (const subtask of subtasks) {
-        await ctx.db.delete(subtask._id);
-      }
-      await deleteTaskAttachments(ctx, task._id);
-      await ctx.db.delete(task._id);
+      await deleteTaskCascade(ctx, task);
     }
 
     // If more tasks remain, schedule continuation
@@ -164,46 +143,38 @@ export const deleteAccount = mutation({
       return null;
     }
 
-    // Delete staff members
-    const staff = await ctx.db
-      .query("staffMembers")
-      .withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", userId))
-      .take(200);
-    for (const s of staff) {
-      await ctx.db.delete(s._id);
-    }
-
-    // Delete task templates
-    const templates = await ctx.db
-      .query("taskTemplates")
-      .withIndex("by_userId_category", (q) => q.eq("userId", userId))
-      .take(200);
-    for (const t of templates) {
-      await ctx.db.delete(t._id);
-    }
-
-    // Delete push subscriptions
-    const subs = await ctx.db
-      .query("pushSubscriptions")
-      .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .take(200);
-    for (const sub of subs) {
-      await ctx.db.delete(sub._id);
-    }
-
-    // Delete rate limit entries
-    const limits = await ctx.db
-      .query("rateLimits")
-      .withIndex("by_userId_action", (q) => q.eq("userId", userId))
-      .take(200);
-    for (const entry of limits) {
-      await ctx.db.delete(entry._id);
-    }
-
+    await deleteAccountNonTaskData(ctx, userId);
     await ctx.db.delete(userId);
     return null;
   },
 });
+
+/** Shared cleanup for non-task user data. */
+async function deleteAccountNonTaskData(ctx: MutationCtx, userId: Id<"users">) {
+  const staff = await ctx.db
+    .query("staffMembers")
+    .withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", userId))
+    .take(200);
+  for (const s of staff) await ctx.db.delete(s._id);
+
+  const templates = await ctx.db
+    .query("taskTemplates")
+    .withIndex("by_userId_category", (q) => q.eq("userId", userId))
+    .take(200);
+  for (const t of templates) await ctx.db.delete(t._id);
+
+  const subs = await ctx.db
+    .query("pushSubscriptions")
+    .withIndex("by_userId", (q) => q.eq("userId", userId))
+    .take(200);
+  for (const sub of subs) await ctx.db.delete(sub._id);
+
+  const limits = await ctx.db
+    .query("rateLimits")
+    .withIndex("by_userId_action", (q) => q.eq("userId", userId))
+    .take(200);
+  for (const entry of limits) await ctx.db.delete(entry._id);
+}
 
 // Internal continuation for large account deletion
 export const deleteAccountCleanup = internalMutation({
@@ -216,21 +187,7 @@ export const deleteAccountCleanup = internalMutation({
       .take(200);
 
     for (const task of tasks) {
-      if (task.scheduledReminderId) {
-        await ctx.scheduler.cancel(task.scheduledReminderId);
-      }
-      // Cascade-delete subtasks
-      const subtasks = await ctx.db
-        .query("subtasks")
-        .withIndex("by_parentTaskId_and_sortOrder", (q) =>
-          q.eq("parentTaskId", task._id),
-        )
-        .take(50);
-      for (const subtask of subtasks) {
-        await ctx.db.delete(subtask._id);
-      }
-      await deleteTaskAttachments(ctx, task._id);
-      await ctx.db.delete(task._id);
+      await deleteTaskCascade(ctx, task);
     }
 
     if (tasks.length === 200) {
@@ -238,41 +195,7 @@ export const deleteAccountCleanup = internalMutation({
       return null;
     }
 
-    // Delete staff members
-    const staff = await ctx.db
-      .query("staffMembers")
-      .withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", userId))
-      .take(200);
-    for (const s of staff) {
-      await ctx.db.delete(s._id);
-    }
-
-    // Delete task templates
-    const templates = await ctx.db
-      .query("taskTemplates")
-      .withIndex("by_userId_category", (q) => q.eq("userId", userId))
-      .take(200);
-    for (const t of templates) {
-      await ctx.db.delete(t._id);
-    }
-
-    const subs = await ctx.db
-      .query("pushSubscriptions")
-      .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .take(200);
-    for (const sub of subs) {
-      await ctx.db.delete(sub._id);
-    }
-
-    // Delete rate limit entries
-    const limits = await ctx.db
-      .query("rateLimits")
-      .withIndex("by_userId_action", (q) => q.eq("userId", userId))
-      .take(200);
-    for (const entry of limits) {
-      await ctx.db.delete(entry._id);
-    }
-
+    await deleteAccountNonTaskData(ctx, userId);
     await ctx.db.delete(userId);
     return null;
   },

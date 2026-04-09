@@ -7,7 +7,7 @@ import {
   statusValidator,
   recurringValidator,
 } from "./schema";
-import { completeTaskCore, deleteTaskAttachments } from "./tasks";
+import { completeTaskCore, deleteTaskCascade, insertTaskCore } from "./tasks";
 import { updateParentCounts } from "./subtasks";
 import { validateTimezone, validateDigestTime } from "./validation";
 
@@ -78,6 +78,32 @@ export const getTasksForTelegram = internalQuery({
   },
 });
 
+export const getStaffForTelegram = internalQuery({
+  args: { userId: v.id("users") },
+  returns: v.array(
+    v.object({
+      _id: v.id("staffMembers"),
+      name: v.string(),
+      roleTitle: v.string(),
+      sortOrder: v.number(),
+    }),
+  ),
+  handler: async (ctx, { userId }) => {
+    const rows = await ctx.db
+      .query("staffMembers")
+      .withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", userId))
+      .take(100);
+    return rows
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((s) => ({
+        _id: s._id,
+        name: s.name,
+        roleTitle: s.roleTitle,
+        sortOrder: s.sortOrder,
+      }));
+  },
+});
+
 // ── Mutations ───────────────────────────────────────
 
 export const addTaskFromTelegram = internalMutation({
@@ -90,36 +116,14 @@ export const addTaskFromTelegram = internalMutation({
     dueTime: v.optional(v.string()),
     notes: v.optional(v.string()),
     recurring: v.optional(recurringValidator),
+    assignedStaffId: v.optional(v.id("staffMembers")),
   },
   returns: v.id("tasks"),
-  handler: async (ctx, { userId, title, workstream, priority, ...optional }) => {
-    if (title.length > 200) throw new Error("Title max 200 characters");
-    if (optional.dueTime && !/^\d{2}:\d{2}$/.test(optional.dueTime))
-      throw new Error("dueTime must be HH:MM");
-
-    const existing = await ctx.db
-      .query("tasks")
-      .withIndex("by_userId_status_sortOrder", (q) =>
-        q.eq("userId", userId).eq("status", "todo"),
-      )
-      .order("desc")
-      .first();
-
-    const sortOrder = existing ? existing.sortOrder + 1000 : 1000;
-
-    const taskId = await ctx.db.insert("tasks", {
-      userId,
-      title,
-      workstream,
-      priority,
+  handler: async (ctx, { userId, ...fields }) => {
+    return await insertTaskCore(ctx, userId, {
+      ...fields,
       status: "todo",
-      sortOrder,
-      createdAt: Date.now(),
-      ...optional,
     });
-
-    await ctx.db.patch(userId, { lastUsedWorkstream: workstream });
-    return taskId;
   },
 });
 
@@ -134,6 +138,7 @@ export const editTaskFromTelegram = internalMutation({
     dueTime: v.optional(v.string()),
     notes: v.optional(v.string()),
     recurring: v.optional(recurringValidator),
+    assignedStaffId: v.optional(v.id("staffMembers")),
   },
   returns: v.union(
     v.object({ success: v.literal(false) }),
@@ -165,6 +170,7 @@ export const editTaskFromTelegram = internalMutation({
     if (updates.dueTime !== undefined) changes.push(`time → ${updates.dueTime}`);
     if (updates.notes !== undefined) changes.push("notes updated");
     if (updates.recurring !== undefined) changes.push(`recurring → ${updates.recurring}`);
+    if (updates.assignedStaffId !== undefined) changes.push("assignee updated");
 
     // Build typed patch from defined fields
     const patch = {
@@ -175,6 +181,7 @@ export const editTaskFromTelegram = internalMutation({
       ...(updates.dueTime !== undefined && { dueTime: updates.dueTime }),
       ...(updates.notes !== undefined && { notes: updates.notes }),
       ...(updates.recurring !== undefined && { recurring: updates.recurring }),
+      ...(updates.assignedStaffId !== undefined && { assignedStaffId: updates.assignedStaffId }),
     };
 
     if (Object.keys(patch).length > 0) {
@@ -289,24 +296,8 @@ export const deleteTaskFromTelegram = internalMutation({
       return { success: false as const };
     }
 
-    if (task.scheduledReminderId) {
-      await ctx.scheduler.cancel(task.scheduledReminderId);
-    }
-
-    // Cascade-delete subtasks
-    const subtasks = await ctx.db
-      .query("subtasks")
-      .withIndex("by_parentTaskId_and_sortOrder", (q) =>
-        q.eq("parentTaskId", taskId),
-      )
-      .take(50);
-    for (const sub of subtasks) {
-      await ctx.db.delete(sub._id);
-    }
-
-    await deleteTaskAttachments(ctx, taskId);
     const { title, workstream } = task;
-    await ctx.db.delete(taskId);
+    await deleteTaskCascade(ctx, task);
 
     return { success: true as const, title, workstream };
   },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, memo } from "react";
 import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Icon } from "@/components/ui/Icon";
@@ -25,7 +25,7 @@ interface AiCaptureBarProps {
   onCompleteTask: (taskId: Id<"tasks">) => void;
 }
 
-export function AiCaptureBar({
+export const AiCaptureBar = memo(function AiCaptureBar({
   tasks,
   staffMembers = [],
   onAddTask,
@@ -182,4 +182,4 @@ export function AiCaptureBar({
       )}
     </div>
   );
-}
+});

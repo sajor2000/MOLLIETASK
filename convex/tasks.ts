@@ -142,6 +142,27 @@ export async function deleteTaskAttachments(
   }
 }
 
+/** Delete a single task and all its children (subtasks, attachments, scheduled reminder). */
+export async function deleteTaskCascade(
+  ctx: MutationCtx,
+  task: Doc<"tasks">,
+) {
+  if (task.scheduledReminderId) {
+    await ctx.scheduler.cancel(task.scheduledReminderId);
+  }
+  const subtasks = await ctx.db
+    .query("subtasks")
+    .withIndex("by_parentTaskId_and_sortOrder", (q) =>
+      q.eq("parentTaskId", task._id),
+    )
+    .take(50);
+  for (const subtask of subtasks) {
+    await ctx.db.delete(subtask._id);
+  }
+  await deleteTaskAttachments(ctx, task._id);
+  await ctx.db.delete(task._id);
+}
+
 // ── Shared task insertion helper ─────────────────────
 
 export async function insertTaskCore(
@@ -234,17 +255,26 @@ export const addTask = mutation({
     });
 
     if (args.reminderAt) {
+      validateReminderAt(args.reminderAt);
       const scheduledId = await ctx.scheduler.runAt(
         args.reminderAt,
         internal.reminders.sendReminder,
         { taskId },
       );
-      await ctx.db.patch(taskId, { scheduledReminderId: scheduledId });
+      await ctx.db.patch(taskId, { scheduledReminderId: scheduledId, reminderAt: args.reminderAt });
     }
 
     return taskId;
   },
 });
+
+/** Reject past timestamps and cap at 1 year out. */
+function validateReminderAt(reminderAt: number) {
+  const now = Date.now();
+  if (reminderAt < now) throw new Error("Reminder must be in the future");
+  const oneYear = 365 * 24 * 60 * 60 * 1000;
+  if (reminderAt > now + oneYear) throw new Error("Reminder cannot be more than 1 year out");
+}
 
 export const updateTask = mutation({
   args: {
@@ -335,6 +365,7 @@ export const updateTask = mutation({
       patch.reminderSent = undefined;
     }
     if (updates.reminderAt) {
+      validateReminderAt(updates.reminderAt);
       const scheduledId = await ctx.scheduler.runAt(
         updates.reminderAt,
         internal.reminders.sendReminder,
@@ -365,23 +396,7 @@ export const deleteTask = mutation({
       throw new Error("Task not found");
     }
 
-    if (task.scheduledReminderId) {
-      await ctx.scheduler.cancel(task.scheduledReminderId);
-    }
-
-    // Cascade-delete subtasks
-    const subtasks = await ctx.db
-      .query("subtasks")
-      .withIndex("by_parentTaskId_and_sortOrder", (q) =>
-        q.eq("parentTaskId", taskId),
-      )
-      .take(50);
-    for (const subtask of subtasks) {
-      await ctx.db.delete(subtask._id);
-    }
-
-    await deleteTaskAttachments(ctx, taskId);
-    await ctx.db.delete(taskId);
+    await deleteTaskCascade(ctx, task);
     return null;
   },
 });
@@ -521,17 +536,7 @@ export const deleteCompletedTasks = mutation({
 
     const batch = completed.slice(0, BATCH);
     for (const task of batch) {
-      const subtasks = await ctx.db
-        .query("subtasks")
-        .withIndex("by_parentTaskId_and_sortOrder", (q) =>
-          q.eq("parentTaskId", task._id),
-        )
-        .take(50);
-      for (const subtask of subtasks) {
-        await ctx.db.delete(subtask._id);
-      }
-      await deleteTaskAttachments(ctx, task._id);
-      await ctx.db.delete(task._id);
+      await deleteTaskCascade(ctx, task);
     }
 
     // Schedule continuation server-side so client isn't blocked
@@ -560,17 +565,7 @@ export const deleteCompletedTasksBatch = internalMutation({
 
     const batch = completed.slice(0, BATCH);
     for (const task of batch) {
-      const subtasks = await ctx.db
-        .query("subtasks")
-        .withIndex("by_parentTaskId_and_sortOrder", (q) =>
-          q.eq("parentTaskId", task._id),
-        )
-        .take(50);
-      for (const s of subtasks) {
-        await ctx.db.delete(s._id);
-      }
-      await deleteTaskAttachments(ctx, task._id);
-      await ctx.db.delete(task._id);
+      await deleteTaskCascade(ctx, task);
     }
 
     if (completed.length > BATCH) {
