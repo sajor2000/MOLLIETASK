@@ -16,6 +16,46 @@ import { api } from "@/convex/_generated/api";
 const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 /**
+ * Debug: log Clerk + Convex auth state to diagnose token flow.
+ */
+function AuthDebug() {
+  const clerkAuth = useAuth();
+  const convexAuth = useConvexAuth();
+
+  useEffect(() => {
+    console.log("[AuthDebug] Clerk:", {
+      isLoaded: clerkAuth.isLoaded,
+      isSignedIn: clerkAuth.isSignedIn,
+      userId: clerkAuth.userId,
+    });
+    console.log("[AuthDebug] Convex:", {
+      isLoading: convexAuth.isLoading,
+      isAuthenticated: convexAuth.isAuthenticated,
+    });
+
+    if (clerkAuth.isSignedIn && clerkAuth.getToken) {
+      clerkAuth.getToken({ template: "convex" }).then((token) => {
+        if (!token) {
+          console.log("[AuthDebug] Convex JWT token: NULL — template missing");
+          return;
+        }
+        try {
+          const payload = JSON.parse(atob(token.split(".")[1]));
+          console.log("[AuthDebug] JWT claims:", { iss: payload.iss, aud: payload.aud, sub: payload.sub });
+          console.log("[AuthDebug] auth.config expects domain: https://literate-dingo-92.clerk.accounts.dev, applicationID: convex");
+        } catch {
+          console.log("[AuthDebug] token exists but could not decode");
+        }
+      }).catch((err) => {
+        console.error("[AuthDebug] getToken error:", err);
+      });
+    }
+  }, [clerkAuth.isLoaded, clerkAuth.isSignedIn, convexAuth.isAuthenticated]);
+
+  return null;
+}
+
+/**
  * Calls users.store once after Convex confirms authentication.
  * Side-effect only — does not gate rendering.
  */
@@ -86,6 +126,7 @@ function ConsumeInviteTokenGated() {
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
   return (
     <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
+      <AuthDebug />
       <Authenticated>
         <StoreUser />
         <ConsumeInviteTokenGated />
