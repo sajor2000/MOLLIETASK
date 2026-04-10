@@ -323,6 +323,8 @@ export const markReminderSent = internalMutation({
   args: { taskId: v.id("tasks") },
   returns: v.null(),
   handler: async (ctx, { taskId }) => {
+    const task = await ctx.db.get(taskId);
+    if (!task) return null; // task deleted between action read and this mutation
     await ctx.db.patch(taskId, { reminderSent: true });
     return null;
   },

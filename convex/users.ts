@@ -127,18 +127,21 @@ export const deleteAccount = mutation({
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
 
-    // Delete tasks in batches to stay within transaction limits
+    // Delete tasks in batches — keep small to stay within Convex transaction limits
+    // (each cascade deletes subtasks + attachments + storage blobs)
+    const BATCH = 25;
     const tasks = await ctx.db
       .query("tasks")
       .withIndex("by_userId_status_sortOrder", (q) => q.eq("userId", userId))
-      .take(200);
+      .take(BATCH + 1);
 
-    for (const task of tasks) {
+    const batch = tasks.slice(0, BATCH);
+    for (const task of batch) {
       await deleteTaskCascade(ctx, task);
     }
 
     // If more tasks remain, schedule continuation
-    if (tasks.length === 200) {
+    if (tasks.length > BATCH) {
       await ctx.scheduler.runAfter(0, internal.users.deleteAccountCleanup, { userId });
       return null;
     }
@@ -181,16 +184,18 @@ export const deleteAccountCleanup = internalMutation({
   args: { userId: v.id("users") },
   returns: v.null(),
   handler: async (ctx, { userId }) => {
+    const BATCH = 25;
     const tasks = await ctx.db
       .query("tasks")
       .withIndex("by_userId_status_sortOrder", (q) => q.eq("userId", userId))
-      .take(200);
+      .take(BATCH + 1);
 
-    for (const task of tasks) {
+    const batch = tasks.slice(0, BATCH);
+    for (const task of batch) {
       await deleteTaskCascade(ctx, task);
     }
 
-    if (tasks.length === 200) {
+    if (tasks.length > BATCH) {
       await ctx.scheduler.runAfter(0, internal.users.deleteAccountCleanup, { userId });
       return null;
     }

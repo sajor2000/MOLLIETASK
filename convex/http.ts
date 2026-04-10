@@ -162,7 +162,14 @@ http.route({
       return new Response("Unauthorized", { status: 401 });
     }
 
-    const body = (await req.json()) as TelegramWebhookBody;
+    let body: TelegramWebhookBody;
+    try {
+      body = (await req.json()) as TelegramWebhookBody;
+    } catch {
+      // Malformed JSON — return 200 so Telegram doesn't retry
+      console.error("Telegram webhook: malformed JSON body");
+      return new Response("OK", { status: 200 });
+    }
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
 
     // Helper to send a text reply via the centralized sendTextMessage action
@@ -171,6 +178,7 @@ http.route({
       await ctx.runAction(internal.telegram.sendTextMessage, { chatId, text });
     };
 
+    try {
     // ── Callback queries (inline keyboard buttons) ──────
     const callbackQuery = body?.callback_query;
     if (callbackQuery?.data) {
@@ -282,7 +290,8 @@ http.route({
       }
 
       try {
-        const today = new Date().toISOString().slice(0, 10);
+        const userTz = user.timezone ?? "America/Chicago";
+        const today = new Date().toLocaleDateString("en-CA", { timeZone: userTz }); // YYYY-MM-DD in user's tz
         const staff = await ctx.runQuery(internal.telegramBot.getStaffForTelegram, { userId: user._id });
         const aiResult = await ctx.runAction(internal.aiActions.parseTaskIntentInternal, {
           userId: user._id,
@@ -397,7 +406,8 @@ http.route({
       const targetTask = tasks[taskNum - 1];
 
       try {
-        const today = new Date().toISOString().slice(0, 10);
+        const editTz = user.timezone ?? "America/Chicago";
+        const today = new Date().toLocaleDateString("en-CA", { timeZone: editTz });
         const staff = await ctx.runQuery(internal.telegramBot.getStaffForTelegram, { userId: user._id });
         const aiResult = await ctx.runAction(internal.aiActions.parseTaskIntentInternal, {
           userId: user._id,
@@ -706,7 +716,8 @@ http.route({
 
     // ── Free-text AI routing ──────────────────────────
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      const freeTz = user.timezone ?? "America/Chicago";
+      const today = new Date().toLocaleDateString("en-CA", { timeZone: freeTz });
       const tasks = await ctx.runQuery(internal.telegramBot.getTasksForTelegram, {
         userId: user._id,
       });
@@ -787,6 +798,11 @@ http.route({
     }
 
     return new Response("OK", { status: 200 });
+    } catch (e) {
+      // Catch-all: return 200 so Telegram doesn't retry on unexpected errors
+      console.error("Telegram webhook unhandled error:", e);
+      return new Response("OK", { status: 200 });
+    }
   }),
 });
 

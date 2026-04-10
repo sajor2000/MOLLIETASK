@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 
 const COOLDOWNS: Record<string, number> = {
   parseTaskIntent: 2000,
@@ -58,7 +59,6 @@ export const cleanupOldEntries = internalMutation({
     }
     // Self-schedule continuation if we hit the batch limit and deleted any
     if (entries.length === 200 && deleted > 0) {
-      const { internal } = await import("./_generated/api");
       await ctx.scheduler.runAfter(0, internal.rateLimit.cleanupOldEntries, {});
     }
     return null;

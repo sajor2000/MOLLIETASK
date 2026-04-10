@@ -56,10 +56,7 @@ export const finalizeUpload = mutation({
       throw new Error("Task not found");
     }
 
-    const meta = (await ctx.db.system.get(
-      "_storage",
-      storageId,
-    )) as StorageMeta | null;
+    const meta = (await ctx.db.system.get(storageId)) as StorageMeta | null;
     if (!meta) {
       throw new Error("Upload not found");
     }

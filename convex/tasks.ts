@@ -301,8 +301,10 @@ export const updateTask = mutation({
       throw new Error("Task not found");
     }
 
-    if (updates.title !== undefined && updates.title.length > 200)
-      throw new Error("Title max 200 characters");
+    if (updates.title !== undefined) {
+      if (!updates.title.trim()) throw new Error("Title is required");
+      if (updates.title.length > 200) throw new Error("Title max 200 characters");
+    }
     if (updates.notes !== undefined && updates.notes.length > 2000)
       throw new Error("Notes max 2000 characters");
     if (updates.dueTime !== undefined && !/^\d{2}:\d{2}$/.test(updates.dueTime))
