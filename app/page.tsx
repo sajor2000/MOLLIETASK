@@ -28,7 +28,7 @@ const TemplateLibrary = dynamic(
 );
 
 export default function KanbanPage() {
-  const { isOwner, isMember, isLoading: wsLoading } = useWorkspace();
+  const { isOwner, isMember } = useWorkspace();
   const tasks = useQuery(api.tasks.getTasksByStatus, {});
   const staffList = useQuery(api.staff.listStaff, isOwner ? {} : "skip");
   const {
@@ -83,9 +83,7 @@ export default function KanbanPage() {
     setPrefillData(undefined);
   };
 
-  // Wait for both tasks and workspace identity before rendering — ensures the
-  // Add Task button shows correctly for owners and never flickers on/off.
-  if (tasks === undefined || wsLoading) {
+  if (tasks === undefined) {
     return (
       <AppShell>
         <div className="flex items-center justify-center h-[calc(100dvh-64px)]">
