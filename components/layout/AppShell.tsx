@@ -35,7 +35,7 @@ export function AppShell({
         />
         <main className="flex-1 pb-[56px] md:pb-0 flex flex-col min-h-0">{children}</main>
       </div>
-      <BottomNav />
+      <BottomNav onAddTask={onAddTask} />
     </div>
   );
 }

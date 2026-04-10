@@ -91,7 +91,7 @@ export function TopBar({ onAddTask, onOpenTemplates, topBarExtra, searchQuery, o
             className="flex items-center gap-1.5 px-4 py-1.5 bg-accent text-bg-base text-[12px] font-medium rounded-[4px] hover:opacity-90 transition-opacity duration-200"
           >
             <Icon name="add" className="w-[18px] h-[18px]" />
-            <span className="hidden sm:inline">Add Task</span>
+            <span>Add Task</span>
           </button>
         )}
       </div>

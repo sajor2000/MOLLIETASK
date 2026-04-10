@@ -23,7 +23,7 @@ export default function TodayPage() {
     rangeStartTs: 0,
     rangeEndTs: todayEndTs,
   });
-  const staffList = useQuery(api.staff.listStaff, isOwner ? {} : "skip");
+  const staffList = useQuery(api.staff.listStaff, isMember ? "skip" : {});
   const {
     editingTask,
     setEditingTask,
@@ -83,7 +83,7 @@ export default function TodayPage() {
               })}
             </p>
           </div>
-          {isOwner && (
+          {!isMember && (
             <button
               onClick={handleAddToday}
               className="p-2 text-text-muted hover:text-accent transition-colors duration-200"
@@ -94,11 +94,15 @@ export default function TodayPage() {
         </div>
 
         {tasks === undefined ? (
-          <p className="text-[13px] text-text-muted text-center py-12">Loading...</p>
+          <div className="space-y-3 py-6">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-[52px] bg-surface rounded-[4px] animate-pulse" />
+            ))}
+          </div>
         ) : isEmpty ? (
           <div className="text-center py-16">
             <p className="text-[13px] text-text-muted">Nothing due today</p>
-            {isOwner && (
+            {!isMember && (
               <button
                 onClick={handleAddToday}
                 className="mt-3 text-[13px] text-accent hover:opacity-80 transition-opacity"

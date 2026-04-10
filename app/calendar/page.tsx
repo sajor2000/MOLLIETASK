@@ -224,7 +224,7 @@ export default function CalendarPage() {
                   day: "numeric",
                 })}
               </p>
-              {isOwner && (
+              {!isMember && (
                 <button
                   onClick={() => handleAddOnDate(selectedDate)}
                   className="p-1 text-text-muted hover:text-accent transition-colors"

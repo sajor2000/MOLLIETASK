@@ -61,14 +61,14 @@ export const getTasksByStatus = query({
           .withIndex("by_workspaceId_status_sortOrder", (q) =>
             q.eq("workspaceId", wsCtx.workspaceId).eq("status", status),
           )
-          .take(500);
+          .take(200);
       }
       return await ctx.db
         .query("tasks")
         .withIndex("by_workspaceId_status_sortOrder", (q) =>
           q.eq("workspaceId", wsCtx.workspaceId),
         )
-        .take(500);
+        .take(200);
     }
 
     // Member: only assigned practice tasks
@@ -81,7 +81,7 @@ export const getTasksByStatus = query({
           .eq("workspaceId", wsCtx.workspaceId)
           .eq("assignedStaffId", staffId),
       )
-      .take(500);
+      .take(100);
     return tasks.filter(
       (t) => t.workstream === "practice" && (!status || t.status === status),
     );
@@ -109,7 +109,7 @@ export const getTasksForDateRange = query({
             .gte("dueDate", rangeStartTs)
             .lte("dueDate", rangeEndTs),
         )
-        .take(500);
+        .take(200);
       const inProgressTasks = await ctx.db
         .query("tasks")
         .withIndex("by_workspaceId_status_dueDate", (q) =>
@@ -119,7 +119,7 @@ export const getTasksForDateRange = query({
             .gte("dueDate", rangeStartTs)
             .lte("dueDate", rangeEndTs),
         )
-        .take(500);
+        .take(200);
       return [...todoTasks, ...inProgressTasks];
     }
 
@@ -131,7 +131,7 @@ export const getTasksForDateRange = query({
       .withIndex("by_workspaceId_assignedStaffId", (q) =>
         q.eq("workspaceId", wsCtx.workspaceId).eq("assignedStaffId", staffId),
       )
-      .take(500);
+      .take(100);
     return tasks.filter(
       (t) =>
         t.workstream === "practice" &&

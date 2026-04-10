@@ -46,8 +46,8 @@ export function TaskOverlays({
           task={editingTask}
           prefill={prefill}
           staffMembers={staffMembers}
-          onSave={isOwner ? onSave : undefined}
-          onDelete={isOwner && editingTask ? () => onDelete(editingTask._id) : undefined}
+          onSave={!isMember ? onSave : undefined}
+          onDelete={!isMember && editingTask ? () => onDelete(editingTask._id) : undefined}
           onClose={onClose}
           readOnly={isMember}
         />

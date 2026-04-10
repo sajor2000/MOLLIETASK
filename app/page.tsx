@@ -5,19 +5,13 @@ import dynamic from "next/dynamic";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { AppShell } from "@/components/layout/AppShell";
+import { KanbanBoard } from "@/components/kanban/KanbanBoard";
+import { TaskOverlays } from "@/components/task/TaskOverlays";
 import type { Doc } from "@/convex/_generated/dataModel";
 import type { TaskFormData } from "@/lib/constants";
 import { useTaskActions } from "@/hooks/useTaskActions";
 import { useWorkspace } from "@/hooks/useWorkspace";
 
-const KanbanBoard = dynamic(
-  () => import("@/components/kanban/KanbanBoard").then((m) => ({ default: m.KanbanBoard })),
-  { ssr: false },
-);
-const TaskOverlays = dynamic(
-  () => import("@/components/task/TaskOverlays").then((m) => ({ default: m.TaskOverlays })),
-  { ssr: false },
-);
 const AiCaptureBar = dynamic(
   () => import("@/components/task/AiCaptureBar").then((m) => ({ default: m.AiCaptureBar })),
   { ssr: false },
@@ -30,7 +24,7 @@ const TemplateLibrary = dynamic(
 export default function KanbanPage() {
   const { isOwner, isMember } = useWorkspace();
   const tasks = useQuery(api.tasks.getTasksByStatus, {});
-  const staffList = useQuery(api.staff.listStaff, isOwner ? {} : "skip");
+  const staffList = useQuery(api.staff.listStaff, isMember ? "skip" : {});
   const {
     editingTask,
     setEditingTask,
@@ -86,7 +80,7 @@ export default function KanbanPage() {
   // Keyboard shortcut: press N to open new task (owner only, not while typing)
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (!isOwner) return;
+      if (isMember) return;
       if (e.key !== "n" && e.key !== "N") return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const el = e.target as HTMLElement;
@@ -98,13 +92,20 @@ export default function KanbanPage() {
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isOwner, isCreating, editingTask, setIsCreating]);
+  }, [isMember, isCreating, editingTask, setIsCreating]);
 
   if (tasks === undefined) {
     return (
-      <AppShell>
-        <div className="flex items-center justify-center h-[calc(100dvh-64px)]">
-          <p className="text-[13px] text-text-muted">Loading...</p>
+      <AppShell onAddTask={() => setIsCreating(true)}>
+        <div className="flex gap-0 h-full overflow-x-auto">
+          {["todo", "inprogress", "done"].map((col) => (
+            <div key={col} className="flex-1 min-w-[280px] px-3 py-4">
+              <div className="h-4 w-20 bg-surface rounded animate-pulse mb-4" />
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-[72px] bg-surface rounded-[4px] mb-2 animate-pulse" />
+              ))}
+            </div>
+          ))}
         </div>
       </AppShell>
     );
@@ -112,12 +113,12 @@ export default function KanbanPage() {
 
   return (
     <AppShell
-      onAddTask={isOwner ? () => setIsCreating(true) : undefined}
-      onOpenTemplates={isOwner ? () => setShowTemplates(true) : undefined}
+      onAddTask={isMember ? undefined : () => setIsCreating(true)}
+      onOpenTemplates={isMember ? undefined : () => setShowTemplates(true)}
       searchQuery={searchQuery}
       onSearchChange={setSearchQuery}
       topBarExtra={
-        isOwner ? (
+        !isMember ? (
           <AiCaptureBar
             tasks={tasks}
             staffMembers={staffList ?? []}
@@ -131,7 +132,7 @@ export default function KanbanPage() {
     >
       <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
         {/* Mobile-only AI capture bar (desktop version lives in the top bar) */}
-        {isOwner && (
+        {!isMember && (
           <div className="md:hidden shrink-0 px-4 py-2 border-b border-border/50">
             <AiCaptureBar
               tasks={tasks}
@@ -148,10 +149,10 @@ export default function KanbanPage() {
           <KanbanBoard
             tasks={filteredTasks ?? []}
             staffById={staffById}
-            onMoveTask={isOwner ? handleReorder : undefined}
+            onMoveTask={isMember ? undefined : handleReorder}
             onEditTask={setEditingTask}
             onCompleteTask={handleComplete}
-            onClearCompleted={isOwner ? handleClearCompleted : undefined}
+            onClearCompleted={isMember ? undefined : handleClearCompleted}
           />
         </div>
       </div>
@@ -173,7 +174,7 @@ export default function KanbanPage() {
         onErrorDismiss={clearError}
       />
 
-      {showTemplates && isOwner && (
+      {showTemplates && !isMember && (
         <TemplateLibrary
           onClose={() => setShowTemplates(false)}
           onEditTask={(task) => {
