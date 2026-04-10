@@ -16,27 +16,25 @@ interface TaskCardProps {
   onComplete: (taskId: Id<"tasks">) => void;
 }
 
-export const TaskCard = memo(function TaskCard({
+interface TaskCardBodyProps {
+  task: Doc<"tasks">;
+  assigneeInitials?: string;
+  onEdit?: () => void;
+  onComplete?: () => void;
+  completing?: boolean;
+  isDragging?: boolean;
+  dragHandle?: React.ReactNode;
+}
+
+function TaskCardBody({
   task,
   assigneeInitials,
   onEdit,
   onComplete,
-}: TaskCardProps) {
-  const [completing, setCompleting] = useState(false);
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: task._id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
+  completing = false,
+  isDragging = false,
+  dragHandle,
+}: TaskCardBodyProps) {
   const dueLabel = formatDueDate(task.dueDate);
   const isOverdue = isTaskOverdue(task.dueDate, task.status);
   const subtaskTotal = task.subtaskTotal ?? 0;
@@ -44,36 +42,27 @@ export const TaskCard = memo(function TaskCard({
 
   return (
     <div
-      ref={setNodeRef}
-      style={style}
       className={`group bg-surface rounded-[4px] p-4 transition-colors duration-200 hover:bg-surface-elevated ${
         isDragging ? "opacity-50 scale-[1.02] ring-1 ring-accent/30" : ""
       }`}
     >
       <div className="flex items-start gap-3">
-        {/* Drag handle */}
-        <button
-          className="mt-0.5 shrink-0 touch-none cursor-grab active:cursor-grabbing text-text-muted/40 hover:text-text-muted transition-colors"
-          aria-label="Drag to reorder"
-          {...attributes}
-          {...listeners}
-        >
-          <Icon name="drag_indicator" className="w-[18px] h-[18px]" />
-        </button>
+        {dragHandle}
 
         {/* Checkbox */}
         <button
           onClick={(e) => {
             e.stopPropagation();
-            if (task.status === "done" || completing) return;
-            setCompleting(true);
-            setTimeout(() => onComplete(task._id), 300);
+            if (!onComplete || task.status === "done" || completing) return;
+            onComplete();
           }}
+          type="button"
+          disabled={!onComplete}
           className={`mt-0.5 w-[18px] h-[18px] rounded-[4px] border shrink-0 flex items-center justify-center transition-all duration-200 ${
             completing || task.status === "done"
               ? "border-success bg-success/20"
               : "border-text-muted/60 hover:border-accent"
-          }`}
+          } ${!onComplete ? "pointer-events-none" : ""}`}
           aria-label={`Complete ${task.title}`}
         >
           {(completing || task.status === "done") && (
@@ -82,9 +71,12 @@ export const TaskCard = memo(function TaskCard({
         </button>
 
         {/* Content — clickable for edit */}
-        <div
-          className="flex-1 min-w-0 cursor-pointer"
-          onClick={() => onEdit(task)}
+        <button
+          type="button"
+          className="flex-1 min-w-0 text-left cursor-pointer"
+          onClick={() => onEdit?.()}
+          disabled={!onEdit}
+          aria-label={onEdit ? `Edit ${task.title}` : undefined}
         >
           <div className="flex items-center gap-2">
             <p
@@ -127,8 +119,80 @@ export const TaskCard = memo(function TaskCard({
               </span>
             )}
           </div>
-        </div>
+        </button>
       </div>
     </div>
+  );
+}
+
+export const TaskCard = memo(function TaskCard({
+  task,
+  assigneeInitials,
+  onEdit,
+  onComplete,
+}: TaskCardProps) {
+  const [completing, setCompleting] = useState(false);
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: task._id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <TaskCardBody
+        task={task}
+        assigneeInitials={assigneeInitials}
+        onEdit={() => onEdit(task)}
+        onComplete={() => {
+          if (task.status === "done" || completing) return;
+          setCompleting(true);
+          setTimeout(() => onComplete(task._id), 300);
+        }}
+        completing={completing}
+        isDragging={isDragging}
+        dragHandle={(
+          <button
+            type="button"
+            className="mt-0.5 shrink-0 touch-none cursor-grab active:cursor-grabbing text-text-muted/40 hover:text-text-muted transition-colors"
+            aria-label={`Drag to reorder ${task.title}`}
+            {...attributes}
+            {...listeners}
+          >
+            <Icon name="drag_indicator" className="w-[18px] h-[18px]" />
+          </button>
+        )}
+      />
+    </div>
+  );
+});
+
+interface TaskCardPreviewProps {
+  task: Doc<"tasks">;
+  assigneeInitials?: string;
+}
+
+export const TaskCardPreview = memo(function TaskCardPreview({
+  task,
+  assigneeInitials,
+}: TaskCardPreviewProps) {
+  return (
+    <TaskCardBody
+      task={task}
+      assigneeInitials={assigneeInitials}
+      dragHandle={
+        <span className="mt-0.5 shrink-0 text-text-muted/40">
+          <Icon name="drag_indicator" className="w-[18px] h-[18px]" />
+        </span>
+      }
+    />
   );
 });

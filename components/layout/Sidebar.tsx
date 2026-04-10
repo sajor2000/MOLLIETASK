@@ -30,6 +30,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              aria-current={isActive ? "page" : undefined}
               className={`flex items-center gap-3 px-3 py-2 text-[13px] rounded-[4px] transition-colors duration-200 ${
                 isActive
                   ? "text-accent font-medium bg-surface border-r-2 border-accent"

@@ -16,7 +16,7 @@ import {
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { KanbanColumn } from "./KanbanColumn";
-import { TaskCard } from "./TaskCard";
+import { TaskCardPreview } from "./TaskCard";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { COLUMN_ORDER, TaskStatus } from "@/lib/constants";
 import { staffInitials } from "@/lib/staffUtils";
@@ -61,7 +61,7 @@ export const KanbanBoard = memo(function KanbanBoard({
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, {
-      activationConstraint: { delay: 200, tolerance: 5 },
+      activationConstraint: { delay: 120, tolerance: 5 },
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
@@ -155,6 +155,9 @@ export const KanbanBoard = memo(function KanbanBoard({
         <div className="flex items-center justify-end px-4 py-2 shrink-0">
           <button
             onClick={toggleDone}
+            type="button"
+            aria-pressed={showDone}
+            aria-label={showDone ? "Hide completed tasks" : "Show completed tasks"}
             className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-[4px] text-[12px] font-medium transition-colors duration-200 ${
               showDone
                 ? "bg-success/15 text-success"
@@ -173,7 +176,9 @@ export const KanbanBoard = memo(function KanbanBoard({
           </button>
         </div>
 
-        <div className="flex gap-0 flex-1 min-h-0 overflow-x-auto snap-x snap-mandatory md:snap-none md:overflow-x-visible">
+        <div className={`flex gap-0 flex-1 min-h-0 overflow-x-auto touch-pan-x md:overflow-x-visible ${
+          activeId ? "snap-none" : "snap-x snap-mandatory md:snap-none"
+        }`}>
           {visibleColumns.map((status) => (
             <KanbanColumn
               key={status}
@@ -191,7 +196,7 @@ export const KanbanBoard = memo(function KanbanBoard({
       <DragOverlay>
         {activeTask ? (
           <div className="rotate-[2deg] scale-[1.02]">
-            <TaskCard
+            <TaskCardPreview
               task={activeTask}
               assigneeInitials={
                 activeTask.assignedStaffId
@@ -200,8 +205,6 @@ export const KanbanBoard = memo(function KanbanBoard({
                     )
                   : undefined
               }
-              onEdit={noop}
-              onComplete={noop}
             />
           </div>
         ) : null}

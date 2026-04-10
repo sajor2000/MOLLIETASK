@@ -19,10 +19,10 @@ export function ModalShell({ ariaLabel, onClose, className, children }: ModalShe
         onClick={onClose}
       />
 
-      <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-6">
+      <div className="fixed inset-0 z-[70] pointer-events-none flex items-end md:items-center justify-center md:p-6">
         <div
           className={[
-            "bg-surface-elevated border-t border-x md:border border-border rounded-t-[8px] md:rounded-[4px]",
+            "pointer-events-auto bg-surface-elevated border-t border-x md:border border-border rounded-t-[8px] md:rounded-[4px]",
             "w-full",
             "max-h-[85dvh] md:max-h-[80vh]",
             "flex flex-col min-h-0 overflow-hidden",

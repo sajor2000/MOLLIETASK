@@ -101,7 +101,7 @@ function SortableSubtaskItem({
       {/* Delete button */}
       <button
         onClick={() => onDelete(subtask._id)}
-        className="shrink-0 opacity-0 group-hover:opacity-100 text-text-muted hover:text-destructive transition-all duration-200"
+        className="shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 text-text-muted hover:text-destructive transition-all duration-200"
         aria-label={`Delete ${subtask.title}`}
       >
         <Icon name="close" className="w-[14px] h-[14px]" />

@@ -81,9 +81,9 @@ export function TemplateLibrary({ onClose, onEditTask }: TemplateLibraryProps) {
         onClick={onClose}
       />
 
-      <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-6">
+      <div className="fixed inset-0 z-[70] pointer-events-none flex items-end md:items-center justify-center md:p-6">
         <div
-          className="bg-surface-elevated border-t border-x md:border border-border rounded-t-[8px] md:rounded-[4px] w-full md:max-w-[560px] max-h-[85dvh] md:max-h-[80vh] flex flex-col min-h-0 overflow-hidden animate-[slideUp_200ms_ease-out] md:animate-[fadeIn_150ms_ease-out]"
+          className="pointer-events-auto bg-surface-elevated border-t border-x md:border border-border rounded-t-[8px] md:rounded-[4px] w-full md:max-w-[560px] max-h-[85dvh] md:max-h-[80vh] flex flex-col min-h-0 overflow-hidden animate-[slideUp_200ms_ease-out] md:animate-[fadeIn_150ms_ease-out]"
           role="dialog"
           aria-modal="true"
           aria-label="Task templates"
@@ -97,6 +97,7 @@ export function TemplateLibrary({ onClose, onEditTask }: TemplateLibraryProps) {
             <div className="flex items-center gap-3">
               {(selectedCategory || editingTemplate || creatingInCategory) && (
                 <button
+                  type="button"
                   onClick={() => {
                     if (editingTemplate || creatingInCategory) {
                       setEditingTemplate(null);
@@ -105,6 +106,7 @@ export function TemplateLibrary({ onClose, onEditTask }: TemplateLibraryProps) {
                       setSelectedCategory(null);
                     }
                   }}
+                  aria-label={editingTemplate || creatingInCategory ? "Back to template list" : "Back to categories"}
                   className="text-text-muted hover:text-text-secondary transition-colors duration-200"
                 >
                   <Icon name="chevron_left" className="w-5 h-5" />
@@ -119,7 +121,9 @@ export function TemplateLibrary({ onClose, onEditTask }: TemplateLibraryProps) {
               </h2>
             </div>
             <button
+              type="button"
               onClick={onClose}
+              aria-label="Close template library"
               className="text-text-muted hover:text-text-secondary transition-colors duration-200"
             >
               <Icon name="close" className="w-5 h-5" />

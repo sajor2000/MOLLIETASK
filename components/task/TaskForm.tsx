@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useId, useRef } from "react";
 import Link from "next/link";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import type { Workstream, Priority, Recurring, TaskStatus, TaskFormData } from "@/lib/constants";
@@ -20,10 +20,13 @@ interface TaskFormProps {
   onSave: (data: TaskFormData) => void | Promise<void>;
   onDelete?: () => void;
   onClose: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
+  autoFocusTitle?: boolean;
   children?: React.ReactNode;
 }
 
 const titleInputClass = `${textInputBase} w-full text-[15px] leading-[1.4] pt-3.5 pb-3 min-h-[48px] border-b border-border focus:border-accent`;
+const statusOptions = ["todo", "inprogress"] as const;
 
 export function TaskForm({
   task,
@@ -33,8 +36,19 @@ export function TaskForm({
   onSave,
   onDelete,
   onClose,
+  onDirtyChange,
+  autoFocusTitle = false,
   children,
 }: TaskFormProps) {
+  const titleInputId = useId();
+  const workstreamLabelId = useId();
+  const priorityLabelId = useId();
+  const statusLabelId = useId();
+  const assigneeInputId = useId();
+  const dueDateInputId = useId();
+  const dueTimeInputId = useId();
+  const recurringLabelId = useId();
+  const notesInputId = useId();
   const [title, setTitle] = useState(task?.title ?? prefill?.title ?? "");
   const [workstream, setWorkstream] = useState<Workstream>(
     task?.workstream ?? prefill?.workstream ?? "practice"
@@ -61,11 +75,23 @@ export function TaskForm({
   const [assignedStaffId, setAssignedStaffId] = useState<Id<"staffMembers"> | null>(
     task?.assignedStaffId ?? prefill?.assignedStaffId ?? null,
   );
-  const [prevTaskId, setPrevTaskId] = useState(task?._id);
-  if (task?._id !== prevTaskId) {
-    setPrevTaskId(task?._id);
-    setAssignedStaffId(task?.assignedStaffId ?? prefill?.assignedStaffId ?? null);
-  }
+  const statusButtonRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  const initialValues = useMemo(() => ({
+    title: task?.title ?? prefill?.title ?? "",
+    workstream: task?.workstream ?? prefill?.workstream ?? "practice",
+    priority: task?.priority ?? prefill?.priority ?? "normal",
+    status: task?.status ?? prefill?.status ?? "todo",
+    dueDate: task?.dueDate
+      ? toDateInputValue(task.dueDate)
+      : prefill?.dueDate
+        ? toDateInputValue(prefill.dueDate)
+        : "",
+    dueTime: task?.dueTime ?? prefill?.dueTime ?? "",
+    recurring: task?.recurring ?? prefill?.recurring ?? undefined,
+    notes: task?.notes ?? prefill?.notes ?? "",
+    assignedStaffId: task?.assignedStaffId ?? prefill?.assignedStaffId ?? null,
+  }), [task, prefill]);
 
   const staffSlots = useMemo(
     () => [...staffMembers].sort((a, b) => a.sortOrder - b.sortOrder).slice(0, 9),
@@ -106,6 +132,41 @@ export function TaskForm({
     return () => hotkeyRoot.removeEventListener("keydown", onKeyDown, true);
   }, [hotkeyRoot, staffSlots, isTypingTarget]);
 
+  const isDirty = title !== initialValues.title
+    || workstream !== initialValues.workstream
+    || priority !== initialValues.priority
+    || status !== initialValues.status
+    || dueDate !== initialValues.dueDate
+    || dueTime !== initialValues.dueTime
+    || recurring !== initialValues.recurring
+    || notes !== initialValues.notes
+    || assignedStaffId !== initialValues.assignedStaffId;
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  const handleStatusKeyDown = useCallback((event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    const lastIndex = statusOptions.length - 1;
+    let nextIndex: number | null = null;
+
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      nextIndex = index === lastIndex ? 0 : index + 1;
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      nextIndex = index === 0 ? lastIndex : index - 1;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = lastIndex;
+    }
+
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const nextStatus = statusOptions[nextIndex];
+    setStatus(nextStatus);
+    statusButtonRefs.current[nextIndex]?.focus();
+  }, []);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
@@ -126,48 +187,63 @@ export function TaskForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-1 flex-col min-h-0">
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y px-6 pt-3 pb-24 space-y-6 [-webkit-overflow-scrolling:touch]">
+    <form
+      onSubmit={handleSubmit}
+      className="flex flex-1 flex-col min-h-0 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] [scroll-padding-bottom:calc(theme(spacing.24)+var(--keyboard-offset,0px))]"
+    >
+      <div className="px-6 pt-2 space-y-4 [padding-bottom:calc(theme(spacing.24)+var(--keyboard-offset,0px))]">
         {/* Title */}
         <div>
+          <label htmlFor={titleInputId} className="sr-only">
+            Task title
+          </label>
           <input
+            id={titleInputId}
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Task title..."
             maxLength={200}
-            autoFocus
+            autoFocus={autoFocusTitle}
+            data-task-title-input="true"
             className={titleInputClass}
           />
         </div>
 
         {/* Workstream toggle */}
-        <div>
-          <label className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
+        <fieldset>
+          <legend id={workstreamLabelId} className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
             Workstream
-          </label>
-          <WorkstreamPicker value={workstream} onChange={setWorkstream} />
-        </div>
+          </legend>
+          <WorkstreamPicker value={workstream} onChange={setWorkstream} labelledBy={workstreamLabelId} />
+        </fieldset>
 
         {/* Priority toggle */}
-        <div>
-          <label className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
+        <fieldset>
+          <legend id={priorityLabelId} className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
             Priority
-          </label>
-          <PriorityPicker value={priority} onChange={setPriority} />
-        </div>
+          </legend>
+          <PriorityPicker value={priority} onChange={setPriority} labelledBy={priorityLabelId} />
+        </fieldset>
 
         {/* Status — exclude "done" to prevent bypassing completeTaskCore */}
-        <div>
-          <label className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
+        <fieldset>
+          <legend id={statusLabelId} className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
             Status
-          </label>
-          <div className="flex gap-1 bg-bg-base rounded-[4px] p-1">
-            {(["todo", "inprogress"] as const).map((s) => (
+          </legend>
+          <div role="radiogroup" aria-labelledby={statusLabelId} className="flex gap-1 bg-bg-base rounded-[4px] p-1">
+            {statusOptions.map((s, index) => (
               <button
                 key={s}
+                ref={(node) => {
+                  statusButtonRefs.current[index] = node;
+                }}
                 type="button"
                 onClick={() => setStatus(s)}
+                onKeyDown={(event) => handleStatusKeyDown(event, index)}
+                role="radio"
+                aria-checked={status === s}
+                tabIndex={status === s ? 0 : -1}
                 className={`flex-1 py-1.5 text-[13px] rounded-[4px] transition-all duration-200 ${
                   status === s
                     ? "bg-surface text-accent"
@@ -178,11 +254,11 @@ export function TaskForm({
               </button>
             ))}
           </div>
-        </div>
+        </fieldset>
 
         {/* Assignee */}
         <div>
-          <label className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
+          <label htmlFor={assigneeInputId} className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
             Assigned to
           </label>
           {staffMembers.length === 0 ? (
@@ -196,6 +272,7 @@ export function TaskForm({
           ) : (
             <>
               <select
+                id={assigneeInputId}
                 value={assignedStaffId ?? ""}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -223,12 +300,13 @@ export function TaskForm({
         </div>
 
         {/* Due date */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <label className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
+            <label htmlFor={dueDateInputId} className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
               Due date
             </label>
             <input
+              id={dueDateInputId}
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
@@ -236,10 +314,11 @@ export function TaskForm({
             />
           </div>
           <div>
-            <label className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
+            <label htmlFor={dueTimeInputId} className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
               Due time
             </label>
             <input
+              id={dueTimeInputId}
               type="time"
               value={dueTime}
               onChange={(e) => setDueTime(e.target.value)}
@@ -275,20 +354,21 @@ export function TaskForm({
 
         {/* Recurring */}
         {dueDate && (
-          <div>
-            <label className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
+          <fieldset>
+            <legend id={recurringLabelId} className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
               Repeat
-            </label>
-            <RecurringPicker value={recurring} onChange={setRecurring} />
-          </div>
+            </legend>
+            <RecurringPicker value={recurring} onChange={setRecurring} labelledBy={recurringLabelId} />
+          </fieldset>
         )}
 
         {/* Notes */}
         <div>
-          <label className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
+          <label htmlFor={notesInputId} className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
             Notes
           </label>
           <textarea
+            id={notesInputId}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Add notes..."
@@ -314,7 +394,7 @@ export function TaskForm({
       </div>
 
       {/* Actions */}
-      <div className="sticky bottom-0 z-10 px-6 py-4 border-t border-border bg-surface-elevated/95 backdrop-blur supports-[backdrop-filter]:bg-surface-elevated/75 [padding-bottom:calc(theme(spacing.4)+env(safe-area-inset-bottom))] shadow-[0_-10px_30px_-20px_rgba(0,0,0,0.9)]">
+      <div className="sticky bottom-[var(--keyboard-offset,0px)] z-10 px-6 py-3 border-t border-border bg-surface-elevated [padding-bottom:calc(theme(spacing.4)+env(safe-area-inset-bottom))]">
         {showDeleteConfirm ? (
           <div className="flex gap-3">
             <button

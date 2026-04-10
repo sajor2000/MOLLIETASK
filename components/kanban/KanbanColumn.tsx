@@ -87,7 +87,7 @@ export const KanbanColumn = memo(function KanbanColumn({
       {/* Task list */}
       <div
         ref={setNodeRef}
-        className="flex-1 px-3 pb-4 space-y-3 overflow-y-auto"
+        className="flex-1 px-3 pb-4 space-y-3 overflow-y-auto touch-pan-y"
       >
         <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => {

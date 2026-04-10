@@ -81,7 +81,9 @@ export default function TodayPage() {
             </p>
           </div>
           <button
+            type="button"
             onClick={handleAddToday}
+            aria-label="Add task"
             className="p-2 text-text-muted hover:text-accent transition-colors duration-200"
           >
             <Icon name="add" className="w-5 h-5" />

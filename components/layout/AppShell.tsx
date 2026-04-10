@@ -23,7 +23,7 @@ export function AppShell({
   onSearchChange,
 }: AppShellProps) {
   return (
-    <div className="min-h-dvh">
+    <div className="min-h-dvh [--topbar-height:calc(4rem+env(safe-area-inset-top,0px))]">
       <Sidebar />
       <div className="md:ml-64 flex flex-col min-h-dvh">
         <TopBar

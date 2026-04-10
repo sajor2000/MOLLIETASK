@@ -86,8 +86,22 @@ export default function KanbanPage() {
 
   if (tasks === undefined) {
     return (
-      <AppShell>
-        <div className="flex items-center justify-center h-[calc(100dvh-64px)]">
+      <AppShell
+        onAddTask={() => setIsCreating(true)}
+        onOpenTemplates={() => setShowTemplates(true)}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        topBarExtra={
+          <AiCaptureBar
+            tasks={[]}
+            staffMembers={staffList ?? []}
+            onAddTask={handleAiAddTask}
+            onEditTask={handleAiEditTask}
+            onCompleteTask={handleComplete}
+          />
+        }
+      >
+        <div className="flex items-center justify-center h-[calc(100dvh-var(--topbar-height)-56px)] md:h-[calc(100dvh-var(--topbar-height))]">
           <p className="text-[13px] text-text-muted">Loading...</p>
         </div>
       </AppShell>
@@ -110,7 +124,7 @@ export default function KanbanPage() {
         />
       }
     >
-      <div className="h-[calc(100dvh-64px-56px)] md:h-[calc(100dvh-64px)]">
+      <div className="h-[calc(100dvh-var(--topbar-height)-56px)] md:h-[calc(100dvh-var(--topbar-height))]">
         <KanbanBoard
           tasks={filteredTasks ?? []}
           staffById={staffById}

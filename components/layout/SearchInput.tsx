@@ -6,9 +6,10 @@ import { Icon } from "@/components/ui/Icon";
 interface SearchInputProps {
   value: string;
   onChange: (value: string) => void;
+  autoFocus?: boolean;
 }
 
-export function SearchInput({ value, onChange }: SearchInputProps) {
+export function SearchInput({ value, onChange, autoFocus = false }: SearchInputProps) {
   const [localValue, setLocalValue] = useState(value);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -35,7 +36,8 @@ export function SearchInput({ value, onChange }: SearchInputProps) {
         value={localValue}
         onChange={(e) => handleChange(e.target.value)}
         placeholder="Search tasks..."
-        className="bg-bg-base border border-outline-variant/10 rounded-[4px] pl-9 pr-8 pt-1.5 pb-2 text-[12px] leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 w-48"
+        autoFocus={autoFocus}
+        className="bg-bg-base border border-outline-variant/10 rounded-[4px] pl-9 pr-8 pt-1.5 pb-2 text-[12px] leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 w-full md:w-48"
       />
       {localValue && (
         <button
