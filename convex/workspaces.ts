@@ -149,7 +149,12 @@ export const listInvites = query({
     }),
   ),
   handler: async (ctx) => {
-    const wsCtx = await requireOwner(ctx);
+    let wsCtx;
+    try {
+      wsCtx = await requireOwner(ctx);
+    } catch {
+      return [];
+    }
     const invites = await ctx.db
       .query("workspaceInvites")
       .withIndex("by_workspaceId", (q) =>
