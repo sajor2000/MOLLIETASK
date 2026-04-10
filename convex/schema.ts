@@ -166,6 +166,7 @@ export default defineSchema({
     ownerUserId: v.id("users"),
     createdAt: v.number(),
     taskCount: v.optional(v.number()),
+    telegramBotUsername: v.optional(v.string()),
   })
     .index("by_ownerUserId", ["ownerUserId"]),
 

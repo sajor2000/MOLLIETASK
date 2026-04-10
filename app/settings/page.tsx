@@ -10,7 +10,6 @@ import { NotificationToggle } from "@/components/pwa/NotificationToggle";
 import { TIMEZONE_OPTIONS } from "@/lib/constants";
 import { useWorkspace } from "@/hooks/useWorkspace";
 
-const BOT_USERNAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? "";
 
 export default function SettingsPage() {
   const { isOwner } = useWorkspace();
@@ -18,6 +17,7 @@ export default function SettingsPage() {
   const workspace = useQuery(api.workspaces.getWorkspaceInfo);
   const updateSettings = useMutation(api.users.updateSettings);
   const updateWorkspaceName = useMutation(api.workspaces.updateWorkspaceName);
+  const updateTelegramBotUsername = useMutation(api.workspaces.updateTelegramBotUsername);
   const generateToken = useMutation(api.users.generateTelegramLinkToken);
   const unlinkTelegram = useMutation(api.users.unlinkTelegram);
   const deleteAccount = useMutation(api.users.deleteAccount);
@@ -26,6 +26,8 @@ export default function SettingsPage() {
   const [telegramToken, setTelegramToken] = useState<string | null>(null);
   const [workspaceName, setWorkspaceName] = useState("");
   const [editingWorkspaceName, setEditingWorkspaceName] = useState(false);
+  const [botUsername, setBotUsername] = useState("");
+  const [editingBotUsername, setEditingBotUsername] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +82,23 @@ export default function SettingsPage() {
     setEditingWorkspaceName(true);
   }
 
+  async function handleSaveBotUsername() {
+    setSaving("botUsername");
+    setError(null);
+    try {
+      await updateTelegramBotUsername({ username: botUsername });
+      setEditingBotUsername(false);
+    } catch {
+      setError("Failed to save bot username.");
+    }
+    setSaving(null);
+  }
+
+  function startEditBotUsername() {
+    setBotUsername(workspace?.telegramBotUsername ?? "");
+    setEditingBotUsername(true);
+  }
+
   async function handleGenerateToken() {
     setError(null);
     try {
@@ -117,8 +136,9 @@ export default function SettingsPage() {
     }
   }
 
-  const telegramDeepLink = telegramToken && BOT_USERNAME
-    ? `https://t.me/${BOT_USERNAME}?start=${telegramToken}`
+  const storedBotUsername = workspace?.telegramBotUsername ?? "";
+  const telegramDeepLink = telegramToken && storedBotUsername
+    ? `https://t.me/${storedBotUsername}?start=${telegramToken}`
     : null;
 
   return (
@@ -233,6 +253,59 @@ export default function SettingsPage() {
         {/* ── Telegram ── owner only */}
         {isOwner && (
           <Section title="Telegram">
+            {/* Bot username — needed for the "Open in Telegram" deep link */}
+            <div className="mb-4">
+              <label className="text-[12px] text-text-muted block mb-1.5">Bot username</label>
+              {editingBotUsername ? (
+                <div className="flex gap-2">
+                  <div className="flex-1 flex items-center bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 gap-1 focus-within:border-accent transition-colors">
+                    <span className="text-[13px] text-text-muted">@</span>
+                    <input
+                      value={botUsername}
+                      onChange={(e) => setBotUsername(e.target.value)}
+                      placeholder="YourBotName"
+                      maxLength={100}
+                      autoFocus
+                      className="flex-1 bg-transparent text-[13px] text-text-primary focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    disabled={saving === "botUsername"}
+                    onClick={handleSaveBotUsername}
+                    className="px-3 py-2 bg-accent text-bg-base rounded-[4px] text-[12px] font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingBotUsername(false)}
+                    className="px-3 py-2 text-[12px] text-text-muted hover:text-text-secondary"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <span className="text-[13px] text-text-secondary">
+                    {storedBotUsername ? `@${storedBotUsername}` : <span className="text-text-muted italic">Not set</span>}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={startEditBotUsername}
+                    className="text-[12px] text-accent hover:underline"
+                  >
+                    {storedBotUsername ? "Change" : "Set"}
+                  </button>
+                </div>
+              )}
+              {!storedBotUsername && (
+                <p className="text-[11px] text-text-muted mt-1">
+                  Set your bot username to enable one-tap Telegram connection.
+                </p>
+              )}
+            </div>
+
             {user.isTelegramLinked ? (
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">

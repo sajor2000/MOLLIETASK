@@ -271,6 +271,7 @@ export const getWorkspaceInfo = query({
       _id: v.id("workspaces"),
       name: v.string(),
       role: v.union(v.literal("owner"), v.literal("member")),
+      telegramBotUsername: v.optional(v.string()),
     }),
     v.null(),
   ),
@@ -287,11 +288,12 @@ export const getWorkspaceInfo = query({
       _id: workspace._id,
       name: workspace.name,
       role: wsCtx.role,
+      telegramBotUsername: workspace.telegramBotUsername,
     };
   },
 });
 
-// ── Workspace name update ───────────────────────────
+// ── Workspace settings update ───────────────────────
 
 export const updateWorkspaceName = mutation({
   args: { name: v.string() },
@@ -302,6 +304,21 @@ export const updateWorkspaceName = mutation({
     if (trimmed.length > 100) throw new Error("Workspace name too long");
     const wsCtx = await requireOwner(ctx);
     await ctx.db.patch(wsCtx.workspaceId, { name: trimmed });
+    return null;
+  },
+});
+
+export const updateTelegramBotUsername = mutation({
+  args: { username: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { username }) => {
+    // Strip leading @ if user pastes it with the @
+    const clean = username.trim().replace(/^@/, "");
+    if (clean.length > 100) throw new Error("Bot username too long");
+    const wsCtx = await requireOwner(ctx);
+    await ctx.db.patch(wsCtx.workspaceId, {
+      telegramBotUsername: clean || undefined,
+    });
     return null;
   },
 });
