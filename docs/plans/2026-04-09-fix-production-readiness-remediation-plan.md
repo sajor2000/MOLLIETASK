@@ -37,9 +37,9 @@ The audit identified 3 blockers (no error boundaries, timing-vulnerable webhook 
 - No external error reporting service for MVP. Add Sentry/LogRocket as a fast-follow.
 
 **Acceptance criteria:**
-- [ ] A thrown error in any page component shows recovery UI without losing the navigation shell
-- [ ] `global-error.tsx` catches errors in the root layout and shows a full-page reload prompt
-- [ ] Error boundaries do not break the Convex reactive subscription recovery (after `reset()`, queries reconnect)
+- [x] A thrown error in any page component shows recovery UI without losing the navigation shell
+- [x] `global-error.tsx` catches errors in the root layout and shows a full-page reload prompt
+- [x] Error boundaries do not break the Convex reactive subscription recovery (after `reset()`, queries reconnect)
 
 ### 1.2 Constant-Time Webhook Secret Comparison
 
@@ -78,9 +78,9 @@ if (!timingSafeEqual(token, secret)) {
 **Note:** The `bufA.length !== bufB.length` early return does leak length info, but Telegram webhook secrets are fixed-length strings set by the bot owner, so the attacker cannot vary the expected length.
 
 **Acceptance criteria:**
-- [ ] Webhook secret comparison uses bitwise XOR, no `===` or `!==` on the raw secret
-- [ ] Existing Telegram webhook integration tests (manual) still pass
-- [ ] `timingSafeEqual` helper is defined in `http.ts` (private, not exported)
+- [x] Webhook secret comparison uses bitwise XOR, no `===` or `!==` on the raw secret
+- [x] Existing Telegram webhook integration tests (manual) still pass
+- [x] `timingSafeEqual` helper is defined in `http.ts` (private, not exported)
 
 ### 1.3 Extend Rate Limiting
 
@@ -157,12 +157,12 @@ export async function enforceRateLimit(
 **Telegram bot path:** `addTaskFromTelegram` calls `insertTaskCore` directly (internal mutation), so it is NOT rate-limited by the public `addTask` check. The Telegram path already has AI-level rate limiting. Adding task-creation rate limiting to the Telegram path is a separate decision — defer for now since the Telegram bot is used only by the authenticated practice owner.
 
 **Acceptance criteria:**
-- [ ] `addTask` rejects rapid-fire calls faster than 500ms with a user-visible error
-- [ ] `generateUploadUrl` rejects calls faster than 300ms
-- [ ] `generateTelegramLinkToken` rejects calls faster than 30s
-- [ ] `deleteAccount` rejects calls faster than 60s
-- [ ] Rate limit errors surface in the UI via ErrorToast (existing pattern)
-- [ ] Template import (internal path via `insertTaskCore`) is NOT rate-limited
+- [x] `addTask` rejects rapid-fire calls faster than 500ms with a user-visible error
+- [x] `generateUploadUrl` rejects calls faster than 300ms
+- [x] `generateTelegramLinkToken` rejects calls faster than 30s
+- [x] `deleteAccount` rejects calls faster than 60s
+- [x] Rate limit errors surface in the UI via ErrorToast (existing pattern)
+- [x] Template import (internal path via `insertTaskCore`) is NOT rate-limited
 
 ---
 
@@ -201,9 +201,9 @@ export const getAllUsersBatch = internalQuery({
 The `checkOverdue` and `checkDigest` actions loop: fetch a batch, schedule per-user work, then self-schedule with the cursor if not done.
 
 **Acceptance criteria:**
-- [ ] Cron fan-outs process ALL users regardless of count
-- [ ] Each batch processes at most 200 users per action invocation
-- [ ] If fewer than 200 users exist, no continuation is scheduled (single pass)
+- [x] Cron fan-outs process ALL users regardless of count
+- [x] Each batch processes at most 200 users per action invocation
+- [x] If fewer than 200 users exist, no continuation is scheduled (single pass)
 
 ### 2.2 Split `getTasksByStatus` Into Per-Status Queries
 
@@ -255,10 +255,10 @@ export const getTasksByStatus = query({
 **Benefits:** Completing a task no longer invalidates the Today/Calendar subscriptions. The Kanban view still uses the broad query (acceptable since it needs all statuses). Future optimization: split the Kanban into three per-column queries when the optimistic update is refactored.
 
 **Acceptance criteria:**
-- [ ] `getTasksByStatus` accepts optional `status` parameter
-- [ ] Today and Calendar pages subscribe only to non-done statuses
-- [ ] Kanban drag-and-drop still works (optimistic updates unchanged)
-- [ ] No visual regressions in any view
+- [x] `getTasksByStatus` accepts optional `status` parameter
+- [x] Today and Calendar pages subscribe only to non-done statuses
+- [x] Kanban drag-and-drop still works (optimistic updates unchanged)
+- [x] No visual regressions in any view
 
 ### 2.3 Lazy Load Heavy Components
 
@@ -287,9 +287,9 @@ const TemplateLibrary = dynamic(
 **Loading fallback:** Use `null` (no visible spinner). These components are behind auth and Convex loading, so the user already sees the AppShell + "Loading..." before these mount. A skeleton could be added later.
 
 **Acceptance criteria:**
-- [ ] `@dnd-kit` is code-split into a separate chunk (verify in build output)
-- [ ] No flash-of-empty-content visible to the user
-- [ ] All three components render correctly after dynamic import
+- [x] `@dnd-kit` is code-split into a separate chunk (verify in build output)
+- [x] No flash-of-empty-content visible to the user
+- [x] All three components render correctly after dynamic import
 
 ### 2.4 Add `by_ownerUserId_sortOrder` Index to staffMembers
 
@@ -318,9 +318,9 @@ return rows; // already sorted by index, remove .sort()
 **Note:** The existing `by_ownerUserId` index is technically redundant (the compound index covers equality queries on `ownerUserId` alone), but keep it to avoid touching other consumers. Remove in a future cleanup pass.
 
 **Acceptance criteria:**
-- [ ] `listStaff` returns pre-sorted results without in-memory `.sort()`
-- [ ] Staff reordering still works correctly
-- [ ] Schema push succeeds without data loss
+- [x] `listStaff` returns pre-sorted results without in-memory `.sort()`
+- [x] Staff reordering still works correctly
+- [x] Schema push succeeds without data loss
 
 ### 2.5 Consolidate Telegram Webhook Queries
 
@@ -358,9 +358,9 @@ export const getTelegramContext = internalQuery({
 Replace all paired query calls in `http.ts` (free-text handler ~line 717, `/add` handler ~line 295, `/edit` handler ~line 397) with a single `ctx.runQuery(internal.telegramBot.getTelegramContext, { userId })`.
 
 **Acceptance criteria:**
-- [ ] All Telegram command handlers that need tasks+staff use the combined query
-- [ ] Free-text, `/add`, and `/edit` commands still function correctly
-- [ ] One fewer `runQuery` round-trip per Telegram message
+- [x] All Telegram command handlers that need tasks+staff use the combined query
+- [x] Free-text, `/add`, and `/edit` commands still function correctly
+- [x] One fewer `runQuery` round-trip per Telegram message
 
 ---
 
@@ -386,9 +386,9 @@ if (taskCount >= 1000) {
 **Note:** This also applies to the recurring task clone path in `completeTaskCore`. Add the same check there.
 
 **Acceptance criteria:**
-- [ ] Users cannot create more than 1000 tasks
-- [ ] Error message is user-facing and actionable
-- [ ] Recurring task cloning respects the cap
+- [x] Users cannot create more than 1000 tasks
+- [x] Error message is user-facing and actionable
+- [x] Recurring task cloning respects the cap
 
 ### 3.2 Surface Errors in Settings Page
 
@@ -422,9 +422,9 @@ Render error at top of settings panel:
 ```
 
 **Acceptance criteria:**
-- [ ] Every settings action shows an error message on failure
-- [ ] Error clears when the user retries
-- [ ] `deleteAccount` failure is especially visible (irreversible intent)
+- [x] Every settings action shows an error message on failure
+- [x] Error clears when the user retries
+- [x] `deleteAccount` failure is especially visible (irreversible intent)
 
 ### 3.3 Extract Shared TaskListItem Component
 
@@ -445,9 +445,9 @@ interface TaskListItemProps {
 Extract the shared rendering: completion circle, title, workstream badge, recurring indicator, priority dot, due time. The Today view passes `animated={true}` (300ms CSS animation), the Calendar view passes `animated={false}` (instant).
 
 **Acceptance criteria:**
-- [ ] Today and Calendar views render identically to current behavior
-- [ ] Completion animation works on Today, not on Calendar
-- [ ] No duplicated task row markup across views
+- [x] Today and Calendar views render identically to current behavior
+- [x] Completion animation works on Today, not on Calendar
+- [x] No duplicated task row markup across views
 
 ### 3.4 Consolidate Hardcoded Timezone Default
 
@@ -463,9 +463,9 @@ export const DEFAULT_TIMEZONE = "America/Chicago";
 Replace all `"America/Chicago"` literals in `convex/` files with this import. The frontend already has `DEFAULT_TIMEZONE` in `lib/constants.ts` — keep it there (different runtime, can't share). Update `convex/telegramFormat.ts` to import from `./constants` instead of defining its own `DEFAULT_TZ`.
 
 **Acceptance criteria:**
-- [ ] Zero hardcoded `"America/Chicago"` strings in `convex/` (except `convex/constants.ts`)
-- [ ] Frontend `lib/constants.ts` unchanged
-- [ ] All Telegram and reminder timezone fallbacks use the constant
+- [x] Zero hardcoded `"America/Chicago"` strings in `convex/` (except `convex/constants.ts`)
+- [x] Frontend `lib/constants.ts` unchanged
+- [x] All Telegram and reminder timezone fallbacks use the constant
 
 ---
 

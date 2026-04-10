@@ -20,6 +20,7 @@ export default function SettingsPage() {
   const [telegramToken, setTelegramToken] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   if (user === undefined) {
     return (
@@ -38,39 +39,47 @@ export default function SettingsPage() {
 
   async function handleTimezone(tz: string) {
     setSaving("timezone");
+    setError(null);
     try {
       await updateSettings({ timezone: tz });
     } catch (e) {
       console.error("Failed to save timezone:", e);
+      setError("Failed to save timezone. Please try again.");
     }
     setSaving(null);
   }
 
   async function handleDigestTime(time: string) {
     setSaving("digest");
+    setError(null);
     try {
       await updateSettings({ digestTime: time || undefined });
     } catch (e) {
       console.error("Failed to save digest time:", e);
+      setError("Failed to save digest time. Please try again.");
     }
     setSaving(null);
   }
 
   async function handleGenerateToken() {
+    setError(null);
     try {
       const token = await generateToken();
       setTelegramToken(token);
     } catch (e) {
       console.error("Failed to generate token:", e);
+      setError("Failed to generate link token. Please try again.");
     }
   }
 
   async function handleUnlinkTelegram() {
+    setError(null);
     try {
       await unlinkTelegram();
       setTelegramToken(null);
     } catch (e) {
       console.error("Failed to unlink:", e);
+      setError("Failed to unlink Telegram. Please try again.");
     }
   }
 
@@ -79,11 +88,13 @@ export default function SettingsPage() {
   }
 
   async function handleDeleteAccount() {
+    setError(null);
     try {
       await deleteAccount();
       router.push("/sign-out");
     } catch (e) {
       console.error("Failed to delete account:", e);
+      setError("Failed to delete account. Please try again.");
     }
   }
 
@@ -91,6 +102,10 @@ export default function SettingsPage() {
     <AppShell>
       <div className="max-w-lg mx-auto px-6 py-8 space-y-8">
         <h1 className="text-[15px] font-medium text-text-primary">Settings</h1>
+
+        {error && (
+          <p className="text-[13px] text-destructive">{error}</p>
+        )}
 
         {/* Timezone */}
         <Section title="Timezone">
