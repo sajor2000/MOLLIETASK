@@ -1,10 +1,35 @@
 import { v } from "convex/values";
-import { internalMutation } from "./_generated/server";
+import { internalMutation, MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 
 const COOLDOWNS: Record<string, number> = {
   parseTaskIntent: 2000,
   suggestSubtasks: 10000,
 };
+
+/** Inline rate limit check for use inside mutations (cannot call runMutation from a mutation). */
+export async function enforceRateLimit(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  action: string,
+  cooldownMs: number,
+) {
+  const existing = await ctx.db
+    .query("rateLimits")
+    .withIndex("by_userId_action", (q) =>
+      q.eq("userId", userId).eq("action", action),
+    )
+    .first();
+  const now = Date.now();
+  if (existing && now - existing.timestamp < cooldownMs) {
+    throw new Error("Too many requests. Please wait a moment.");
+  }
+  if (existing) {
+    await ctx.db.patch(existing._id, { timestamp: now });
+  } else {
+    await ctx.db.insert("rateLimits", { userId, action, timestamp: now });
+  }
+}
 
 /** Atomically check rate limit and record the hit in a single mutation. */
 export const checkAndRecord = internalMutation({

@@ -10,6 +10,7 @@ import {
 } from "./schema";
 import { getAuthUserId } from "./authHelpers";
 import { getStaffOwnedBy } from "./staff";
+import { enforceRateLimit } from "./rateLimit";
 
 const taskDocValidator = v.object({
   _id: v.id("tasks"),
@@ -37,10 +38,18 @@ const taskDocValidator = v.object({
 // ── Queries ──────────────────────────────────────────
 
 export const getTasksByStatus = query({
-  args: {},
+  args: { status: v.optional(statusValidator) },
   returns: v.array(taskDocValidator),
-  handler: async (ctx) => {
+  handler: async (ctx, { status }) => {
     const userId = await getAuthUserId(ctx);
+    if (status) {
+      return await ctx.db
+        .query("tasks")
+        .withIndex("by_userId_status_sortOrder", (q) =>
+          q.eq("userId", userId).eq("status", status),
+        )
+        .take(500);
+    }
     return await ctx.db
       .query("tasks")
       .withIndex("by_userId_status_sortOrder", (q) => q.eq("userId", userId))
@@ -90,6 +99,14 @@ export async function completeTaskCore(
 
   let nextTaskId: Id<"tasks"> | null = null;
   if (task.recurring && task.dueDate) {
+    // Skip recurring clone if user is at task cap
+    const taskCount = (
+      await ctx.db
+        .query("tasks")
+        .withIndex("by_userId_status_sortOrder", (q) => q.eq("userId", task.userId))
+        .take(1001)
+    ).length;
+    if (taskCount < 1000) {
     const nextDueDate = computeNextDueDate(task.dueDate, task.recurring);
     nextTaskId = await ctx.db.insert("tasks", {
       userId: task.userId,
@@ -122,6 +139,7 @@ export async function completeTaskCore(
         subtaskCompleted: 0,
       });
     }
+    } // end taskCount < 1000
   }
 
   return { nextTaskId, wasRecurring: !!(task.recurring && task.dueDate) };
@@ -166,6 +184,17 @@ export async function insertTaskCore(
     throw new Error("Notes max 2000 characters");
   if (fields.dueTime && !/^\d{2}:\d{2}$/.test(fields.dueTime))
     throw new Error("dueTime must be HH:MM");
+
+  // Cap total tasks per user to prevent unbounded growth
+  const taskCount = (
+    await ctx.db
+      .query("tasks")
+      .withIndex("by_userId_status_sortOrder", (q) => q.eq("userId", userId))
+      .take(1001)
+  ).length;
+  if (taskCount >= 1000) {
+    throw new Error("Task limit reached (1000). Delete some tasks to continue.");
+  }
 
   let assignedStaffId: Id<"staffMembers"> | undefined;
   if (fields.assignedStaffId) {
@@ -221,6 +250,7 @@ export const addTask = mutation({
   returns: v.id("tasks"),
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
+    await enforceRateLimit(ctx, userId, "addTask", 500);
     const taskId = await insertTaskCore(ctx, userId, {
       title: args.title,
       workstream: args.workstream,

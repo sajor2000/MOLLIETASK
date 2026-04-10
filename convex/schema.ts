@@ -82,7 +82,9 @@ export default defineSchema({
     sortOrder: v.number(),
     linkedUserId: v.optional(v.id("users")),
     createdAt: v.number(),
-  }).index("by_ownerUserId", ["ownerUserId"]),
+  })
+    .index("by_ownerUserId", ["ownerUserId"])
+    .index("by_ownerUserId_and_sortOrder", ["ownerUserId", "sortOrder"]),
 
   subtasks: defineTable({
     parentTaskId: v.id("tasks"),

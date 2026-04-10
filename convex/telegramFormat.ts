@@ -1,6 +1,8 @@
 // Pure formatting helpers for Telegram messages — no Convex decorators.
 
-const DEFAULT_TZ = "America/Chicago";
+import { DEFAULT_TIMEZONE } from "./constants";
+
+const DEFAULT_TZ = DEFAULT_TIMEZONE;
 
 type TaskForDisplay = {
   _id: string;

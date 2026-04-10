@@ -6,16 +6,21 @@ import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { AppShell } from "@/components/layout/AppShell";
 import { TaskDetailView } from "@/components/task/TaskDetailView";
+import { TaskListItem } from "@/components/task/TaskListItem";
 import { UndoToast } from "@/components/ui/UndoToast";
 import { ErrorToast } from "@/components/ui/ErrorToast";
 import { Icon } from "@/components/ui/Icon";
-import { WORKSTREAM_CONFIG } from "@/lib/constants";
 import type { TaskFormData } from "@/lib/constants";
 import { toCSTDateString, fromDateInputValue } from "@/lib/dates";
 import { useTaskActions } from "@/hooks/useTaskActions";
 
 export default function TodayPage() {
-  const tasks = useQuery(api.tasks.getTasksByStatus, {});
+  const todoTasks = useQuery(api.tasks.getTasksByStatus, { status: "todo" });
+  const inProgressTasks = useQuery(api.tasks.getTasksByStatus, { status: "inprogress" });
+  const tasks = useMemo(
+    () => (todoTasks && inProgressTasks ? [...todoTasks, ...inProgressTasks] : undefined),
+    [todoTasks, inProgressTasks],
+  );
   const staffList = useQuery(api.staff.listStaff);
   const {
     editingTask,
@@ -40,7 +45,6 @@ export default function TodayPage() {
     const noDueDate: Doc<"tasks">[] = [];
 
     for (const t of tasks ?? []) {
-      if (t.status === "done") continue;
       if (!t.dueDate) {
         noDueDate.push(t);
       } else {
@@ -179,50 +183,14 @@ function TaskSection({
       </p>
       <div className="space-y-1">
         {tasks.map((task) => (
-          <TaskRow
+          <TaskListItem
             key={task._id}
             task={task}
-            onComplete={() => onComplete(task._id)}
-            onEdit={() => onEdit(task)}
+            onComplete={onComplete}
+            onEdit={onEdit}
           />
         ))}
       </div>
-    </div>
-  );
-}
-
-function TaskRow({
-  task,
-  onComplete,
-  onEdit,
-}: {
-  task: Doc<"tasks">;
-  onComplete: () => void;
-  onEdit: () => void;
-}) {
-  const wsConfig = WORKSTREAM_CONFIG[task.workstream];
-
-  return (
-    <div className="flex items-center gap-3 px-3 py-2.5 rounded-[4px] bg-surface hover:bg-surface-elevated transition-colors duration-200 group">
-      <button
-        onClick={onComplete}
-        className="flex-shrink-0 w-5 h-5 rounded-full border-2 border-border hover:border-accent transition-colors duration-200"
-        aria-label="Complete task"
-      />
-      <button onClick={onEdit} className="flex-1 min-w-0 text-left">
-        <p className="text-[13px] text-text-primary truncate">{task.title}</p>
-        <div className="flex items-center gap-2 mt-0.5">
-          <span className={`text-[11px] ${wsConfig.textClass}`}>
-            {wsConfig.label}
-          </span>
-          {task.priority === "high" && (
-            <span className="text-[11px] text-destructive">High</span>
-          )}
-          {task.dueTime && (
-            <span className="text-[11px] text-text-muted">{task.dueTime}</span>
-          )}
-        </div>
-      </button>
     </div>
   );
 }

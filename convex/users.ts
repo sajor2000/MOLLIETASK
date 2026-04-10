@@ -5,6 +5,7 @@ import { workstreamValidator } from "./schema";
 import { getAuthUserId, storeUser } from "./authHelpers";
 import { deleteTaskAttachments } from "./tasks";
 import { validateTimezone, validateDigestTime } from "./validation";
+import { enforceRateLimit } from "./rateLimit";
 
 export const getMe = query({
   args: {},
@@ -13,7 +14,7 @@ export const getMe = query({
       _id: v.id("users"),
       timezone: v.optional(v.string()),
       digestTime: v.optional(v.string()),
-      telegramChatId: v.optional(v.string()),
+      isTelegramLinked: v.boolean(),
       lastUsedWorkstream: v.optional(workstreamValidator),
     }),
     v.null(),
@@ -31,7 +32,7 @@ export const getMe = query({
       _id: user._id,
       timezone: user.timezone,
       digestTime: user.digestTime,
-      telegramChatId: user.telegramChatId,
+      isTelegramLinked: !!user.telegramChatId,
       lastUsedWorkstream: user.lastUsedWorkstream,
     };
   },
@@ -67,6 +68,7 @@ export const generateTelegramLinkToken = mutation({
   returns: v.string(),
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
+    await enforceRateLimit(ctx, userId, "generateTelegramLinkToken", 30_000);
 
     // Convex runtime seeds Math.random() per invocation for determinism.
     // Using it with a large character set + 32 chars gives sufficient entropy
@@ -133,6 +135,7 @@ export const deleteAccount = mutation({
   returns: v.null(),
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
+    await enforceRateLimit(ctx, userId, "deleteAccount", 60_000);
 
     // Delete tasks in batches to stay within transaction limits
     const tasks = await ctx.db

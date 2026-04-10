@@ -6,6 +6,7 @@ import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { AppShell } from "@/components/layout/AppShell";
 import { TaskDetailView } from "@/components/task/TaskDetailView";
+import { TaskListItem } from "@/components/task/TaskListItem";
 import { UndoToast } from "@/components/ui/UndoToast";
 import { ErrorToast } from "@/components/ui/ErrorToast";
 import { Icon } from "@/components/ui/Icon";
@@ -21,7 +22,12 @@ const MONTHS = [
 ];
 
 export default function CalendarPage() {
-  const tasks = useQuery(api.tasks.getTasksByStatus, {});
+  const todoTasks = useQuery(api.tasks.getTasksByStatus, { status: "todo" });
+  const inProgressTasks = useQuery(api.tasks.getTasksByStatus, { status: "inprogress" });
+  const tasks = useMemo(
+    () => (todoTasks && inProgressTasks ? [...todoTasks, ...inProgressTasks] : undefined),
+    [todoTasks, inProgressTasks],
+  );
   const staffList = useQuery(api.staff.listStaff);
   const {
     editingTask,
@@ -53,7 +59,7 @@ export default function CalendarPage() {
 
     const map = new Map<string, Doc<"tasks">[]>();
     for (const t of tasks ?? []) {
-      if (t.status === "done" || !t.dueDate) continue;
+      if (!t.dueDate) continue;
       if (t.dueDate < rangeStart || t.dueDate > rangeEnd) continue;
       const dateStr = toCSTDateString(t.dueDate);
       const list = map.get(dateStr) ?? [];
@@ -229,38 +235,14 @@ export default function CalendarPage() {
               <p className="text-[12px] text-text-muted py-3 text-center">No tasks on this day</p>
             ) : (
               <div className="space-y-1">
-                {selectedTasks.map((task) => {
-                  const wsConfig = WORKSTREAM_CONFIG[task.workstream];
-                  return (
-                    <div
-                      key={task._id}
-                      className="flex items-center gap-3 px-3 py-2 rounded-[4px] hover:bg-surface-elevated transition-colors duration-200"
-                    >
-                      <button
-                        onClick={() => handleComplete(task._id)}
-                        className="flex-shrink-0 w-4.5 h-4.5 rounded-full border-2 border-border hover:border-accent transition-colors"
-                        aria-label="Complete"
-                      />
-                      <button
-                        onClick={() => setEditingTask(task)}
-                        className="flex-1 min-w-0 text-left"
-                      >
-                        <p className="text-[13px] text-text-primary truncate">{task.title}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className={`text-[11px] ${wsConfig.textClass}`}>
-                            {wsConfig.label}
-                          </span>
-                          {task.priority === "high" && (
-                            <span className="text-[11px] text-destructive">High</span>
-                          )}
-                          {task.dueTime && (
-                            <span className="text-[11px] text-text-muted">{task.dueTime}</span>
-                          )}
-                        </div>
-                      </button>
-                    </div>
-                  );
-                })}
+                {selectedTasks.map((task) => (
+                  <TaskListItem
+                    key={task._id}
+                    task={task}
+                    onComplete={handleComplete}
+                    onEdit={setEditingTask}
+                  />
+                ))}
               </div>
             )}
           </div>

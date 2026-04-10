@@ -11,6 +11,7 @@
 import type * as aiActions from "../aiActions.js";
 import type * as authHelpers from "../authHelpers.js";
 import type * as authInternal from "../authInternal.js";
+import type * as constants from "../constants.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as practiceTeamPreset from "../practiceTeamPreset.js";
@@ -39,6 +40,7 @@ declare const fullApi: ApiFromModules<{
   aiActions: typeof aiActions;
   authHelpers: typeof authHelpers;
   authInternal: typeof authInternal;
+  constants: typeof constants;
   crons: typeof crons;
   http: typeof http;
   practiceTeamPreset: typeof practiceTeamPreset;

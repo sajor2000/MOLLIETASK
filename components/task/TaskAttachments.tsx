@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -19,6 +19,7 @@ interface TaskAttachmentsProps {
 
 export function TaskAttachments({ taskId }: TaskAttachmentsProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -27,40 +28,60 @@ export function TaskAttachments({ taskId }: TaskAttachmentsProps) {
   const finalizeUpload = useMutation(api.taskAttachments.finalizeUpload);
   const removeAttachment = useMutation(api.taskAttachments.removeAttachment);
 
+  // Cancel in-flight uploads when the component unmounts (e.g. modal close)
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
+
   async function handleFilesSelected(files: FileList | null) {
     if (!files?.length) return;
     setUploadError(null);
     setUploading(true);
-    try {
-      await Promise.all(
-        Array.from(files).map(async (file) => {
-          const postUrl = await generateUploadUrl({});
-          const uploadContentType = file.type || "application/octet-stream";
-          const res = await fetch(postUrl, {
-            method: "POST",
-            headers: { "Content-Type": uploadContentType },
-            body: file,
-          });
-          if (!res.ok) {
-            throw new Error(`Upload failed (${res.status})`);
-          }
-          const json = (await res.json()) as { storageId?: string };
-          if (!json.storageId) {
-            throw new Error("Upload response missing storageId");
-          }
-          await finalizeUpload({
-            taskId,
-            storageId: json.storageId as Id<"_storage">,
-            filename: file.name,
-          });
-        }),
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    const results = await Promise.allSettled(
+      Array.from(files).map(async (file) => {
+        const postUrl = await generateUploadUrl({});
+        const uploadContentType = file.type || "application/octet-stream";
+        const res = await fetch(postUrl, {
+          method: "POST",
+          headers: { "Content-Type": uploadContentType },
+          body: file,
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          throw new Error(`Upload failed (${res.status})`);
+        }
+        const json = (await res.json()) as { storageId?: string };
+        if (!json.storageId) {
+          throw new Error("Upload response missing storageId");
+        }
+        await finalizeUpload({
+          taskId,
+          storageId: json.storageId as Id<"_storage">,
+          filename: file.name,
+        });
+      }),
+    );
+
+    // Don't update state if the component was unmounted (abort fired)
+    if (controller.signal.aborted) return;
+
+    const failures = results.filter((r) => r.status === "rejected");
+    if (failures.length > 0) {
+      setUploadError(
+        failures.length === files.length
+          ? "Upload failed"
+          : `${failures.length} of ${files.length} files failed to upload`,
       );
-    } catch (e) {
-      setUploadError(e instanceof Error ? e.message : "Upload failed");
-    } finally {
-      setUploading(false);
-      if (inputRef.current) inputRef.current.value = "";
     }
+
+    setUploading(false);
+    if (inputRef.current) inputRef.current.value = "";
   }
 
   return (

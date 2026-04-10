@@ -1,18 +1,32 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { AppShell } from "@/components/layout/AppShell";
-import { KanbanBoard } from "@/components/kanban/KanbanBoard";
-import { TaskDetailView } from "@/components/task/TaskDetailView";
-import { AiCaptureBar } from "@/components/task/AiCaptureBar";
-import { TemplateLibrary } from "@/components/task/TemplateLibrary";
 import { UndoToast } from "@/components/ui/UndoToast";
 import { ErrorToast } from "@/components/ui/ErrorToast";
 import type { Doc } from "@/convex/_generated/dataModel";
 import type { TaskFormData } from "@/lib/constants";
 import { useTaskActions } from "@/hooks/useTaskActions";
+
+const KanbanBoard = dynamic(
+  () => import("@/components/kanban/KanbanBoard").then((m) => ({ default: m.KanbanBoard })),
+  { ssr: false },
+);
+const TaskDetailView = dynamic(
+  () => import("@/components/task/TaskDetailView").then((m) => ({ default: m.TaskDetailView })),
+  { ssr: false },
+);
+const AiCaptureBar = dynamic(
+  () => import("@/components/task/AiCaptureBar").then((m) => ({ default: m.AiCaptureBar })),
+  { ssr: false },
+);
+const TemplateLibrary = dynamic(
+  () => import("@/components/task/TemplateLibrary").then((m) => ({ default: m.TemplateLibrary })),
+  { ssr: false },
+);
 
 export default function KanbanPage() {
   const tasks = useQuery(api.tasks.getTasksByStatus, {});

@@ -2,6 +2,7 @@ import { v, Infer } from "convex/values";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { workstreamValidator, statusValidator } from "./schema";
+import { DEFAULT_TIMEZONE } from "./constants";
 
 type Workstream = Infer<typeof workstreamValidator>;
 
@@ -67,28 +68,38 @@ export const getReminderContext = internalQuery({
   },
 });
 
-// ── All users query (used by crons) ────────────────
+// ── Paginated users query (used by crons) ──────────
 
-export const getAllUsers = internalQuery({
-  args: {},
-  returns: v.array(
-    v.object({
-      _id: v.id("users"),
-      telegramChatId: v.optional(v.string()),
-      timezone: v.optional(v.string()),
-      digestTime: v.optional(v.string()),
-      lastDigestSentAt: v.optional(v.number()),
-    }),
-  ),
-  handler: async (ctx) => {
-    const users = await ctx.db.query("users").take(500);
-    return users.map((u) => ({
-      _id: u._id,
-      telegramChatId: u.telegramChatId,
-      timezone: u.timezone,
-      digestTime: u.digestTime,
-      lastDigestSentAt: u.lastDigestSentAt,
-    }));
+const userBatchItemValidator = v.object({
+  _id: v.id("users"),
+  telegramChatId: v.optional(v.string()),
+  timezone: v.optional(v.string()),
+  digestTime: v.optional(v.string()),
+  lastDigestSentAt: v.optional(v.number()),
+});
+
+export const getUsersBatch = internalQuery({
+  args: { cursor: v.union(v.string(), v.null()) },
+  returns: v.object({
+    users: v.array(userBatchItemValidator),
+    continueCursor: v.string(),
+    isDone: v.boolean(),
+  }),
+  handler: async (ctx, { cursor }) => {
+    const result = await ctx.db
+      .query("users")
+      .paginate({ numItems: 200, cursor });
+    return {
+      users: result.page.map((u) => ({
+        _id: u._id,
+        telegramChatId: u.telegramChatId,
+        timezone: u.timezone,
+        digestTime: u.digestTime,
+        lastDigestSentAt: u.lastDigestSentAt,
+      })),
+      continueCursor: result.continueCursor,
+      isDone: result.isDone,
+    };
   },
 });
 
@@ -203,14 +214,15 @@ export const sendReminder = internalAction({
 });
 
 export const checkOverdue = internalAction({
-  args: {},
+  args: { cursor: v.optional(v.union(v.string(), v.null())) },
   returns: v.null(),
-  handler: async (ctx) => {
-    const users = await ctx.runQuery(internal.reminders.getAllUsers);
-    if (users.length === 0) return null;
+  handler: async (ctx, { cursor }) => {
+    const batch = await ctx.runQuery(internal.reminders.getUsersBatch, {
+      cursor: cursor ?? null,
+    });
 
     const now = Date.now();
-    for (const user of users) {
+    for (const user of batch.users) {
       const overdue = await ctx.runQuery(internal.reminders.getOverdueTasks, {
         userId: user._id,
         now,
@@ -228,17 +240,26 @@ export const checkOverdue = internalAction({
       }
     }
 
+    // Continue with next batch if more users exist
+    if (!batch.isDone) {
+      await ctx.scheduler.runAfter(0, internal.reminders.checkOverdue, {
+        cursor: batch.continueCursor,
+      });
+    }
+
     return null;
   },
 });
 
 export const checkDigest = internalAction({
-  args: {},
+  args: { cursor: v.optional(v.union(v.string(), v.null())) },
   returns: v.null(),
-  handler: async (ctx) => {
-    const users = await ctx.runQuery(internal.reminders.getAllUsers);
+  handler: async (ctx, { cursor }) => {
+    const batch = await ctx.runQuery(internal.reminders.getUsersBatch, {
+      cursor: cursor ?? null,
+    });
 
-    for (const user of users) {
+    for (const user of batch.users) {
       if (!user.digestTime) continue;
 
       // Dedup: skip if sent within last 20 hours
@@ -247,7 +268,7 @@ export const checkDigest = internalAction({
       }
 
       // Compare in user's timezone using Intl.DateTimeFormat.formatToParts
-      const tz = user.timezone ?? "America/Chicago";
+      const tz = user.timezone ?? DEFAULT_TIMEZONE;
       const now = new Date();
       const fmt = new Intl.DateTimeFormat("en-US", {
         timeZone: tz,
@@ -299,6 +320,13 @@ export const checkDigest = internalAction({
 
       await ctx.runMutation(internal.reminders.markDigestSent, {
         userId: user._id,
+      });
+    }
+
+    // Continue with next batch if more users exist
+    if (!batch.isDone) {
+      await ctx.scheduler.runAfter(0, internal.reminders.checkDigest, {
+        cursor: batch.continueCursor,
       });
     }
 

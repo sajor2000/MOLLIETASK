@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { getAuthUserId } from "./authHelpers";
+import { enforceRateLimit } from "./rateLimit";
 
 /** Max attachments per task (enforced in finalizeUpload). */
 export const MAX_FILES_PER_TASK = 10;
@@ -35,7 +36,8 @@ export const generateUploadUrl = mutation({
   args: {},
   returns: v.string(),
   handler: async (ctx) => {
-    await getAuthUserId(ctx);
+    const userId = await getAuthUserId(ctx);
+    await enforceRateLimit(ctx, userId, "generateUploadUrl", 300);
     return await ctx.storage.generateUploadUrl();
   },
 });
