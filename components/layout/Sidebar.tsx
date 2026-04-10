@@ -49,6 +49,13 @@ export function Sidebar() {
         })}
       </nav>
 
+      <Link
+        href="/sign-out"
+        className="flex items-center gap-3 px-3 py-2 text-[13px] text-text-muted hover:text-destructive hover:bg-surface rounded-[4px] transition-colors duration-200"
+      >
+        <Icon name="logout" className="w-5 h-5" />
+        <span>Sign out</span>
+      </Link>
     </aside>
   );
 }

@@ -39,6 +39,14 @@ export function BottomNav() {
           </Link>
         );
       })}
+
+      <Link
+        href="/sign-out"
+        className="flex flex-col items-center justify-center gap-0.5 px-4 py-1 rounded-[4px] text-text-secondary hover:text-destructive transition-colors duration-200"
+      >
+        <Icon name="logout" className="w-5 h-5" />
+        <span className="text-[11px] font-medium uppercase tracking-wide">Out</span>
+      </Link>
     </nav>
   );
 }
