@@ -7,7 +7,7 @@ import {
   statusValidator,
   recurringValidator,
 } from "./schema";
-import { completeTaskCore, deleteTaskAttachments } from "./tasks";
+import { completeTaskCore, deleteTaskAttachments, insertTaskCore } from "./tasks";
 import { updateParentCounts } from "./subtasks";
 import { validateTimezone, validateDigestTime } from "./validation";
 
@@ -93,33 +93,13 @@ export const addTaskFromTelegram = internalMutation({
   },
   returns: v.id("tasks"),
   handler: async (ctx, { userId, title, workstream, priority, ...optional }) => {
-    if (title.length > 200) throw new Error("Title max 200 characters");
-    if (optional.dueTime && !/^\d{2}:\d{2}$/.test(optional.dueTime))
-      throw new Error("dueTime must be HH:MM");
-
-    const existing = await ctx.db
-      .query("tasks")
-      .withIndex("by_userId_status_sortOrder", (q) =>
-        q.eq("userId", userId).eq("status", "todo"),
-      )
-      .order("desc")
-      .first();
-
-    const sortOrder = existing ? existing.sortOrder + 1000 : 1000;
-
-    const taskId = await ctx.db.insert("tasks", {
-      userId,
+    return await insertTaskCore(ctx, userId, {
       title,
       workstream,
       priority,
       status: "todo",
-      sortOrder,
-      createdAt: Date.now(),
       ...optional,
     });
-
-    await ctx.db.patch(userId, { lastUsedWorkstream: workstream });
-    return taskId;
   },
 });
 

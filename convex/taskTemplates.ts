@@ -5,7 +5,7 @@ import {
   priorityValidator,
   recurringValidator,
 } from "./schema";
-import { getAuthUserId } from "./authHelpers";
+import { requireOwner } from "./authHelpers";
 import { insertTaskCore } from "./tasks";
 
 // ── Queries ──────────────────────────────────────────
@@ -14,6 +14,7 @@ const templateDocValidator = v.object({
   _id: v.id("taskTemplates"),
   _creationTime: v.number(),
   userId: v.id("users"),
+  workspaceId: v.optional(v.id("workspaces")),
   category: v.string(),
   title: v.string(),
   workstream: workstreamValidator,
@@ -29,10 +30,12 @@ export const listTemplates = query({
   args: {},
   returns: v.array(templateDocValidator),
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
+    const wsCtx = await requireOwner(ctx);
     return await ctx.db
       .query("taskTemplates")
-      .withIndex("by_userId_category", (q) => q.eq("userId", userId))
+      .withIndex("by_workspaceId_category", (q) =>
+        q.eq("workspaceId", wsCtx.workspaceId),
+      )
       .take(500);
   },
 });
@@ -51,7 +54,7 @@ export const addTemplate = mutation({
   },
   returns: v.id("taskTemplates"),
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
+    const wsCtx = await requireOwner(ctx);
 
     if (!args.title.trim()) throw new Error("Title is required");
     if (args.title.length > 200) throw new Error("Title max 200 characters");
@@ -62,14 +65,15 @@ export const addTemplate = mutation({
 
     const existing = await ctx.db
       .query("taskTemplates")
-      .withIndex("by_userId_category", (q) =>
-        q.eq("userId", userId).eq("category", args.category),
+      .withIndex("by_workspaceId_category", (q) =>
+        q.eq("workspaceId", wsCtx.workspaceId).eq("category", args.category),
       )
       .take(200);
     const maxSort = existing.reduce((m, t) => Math.max(m, t.sortOrder), 0);
 
     return await ctx.db.insert("taskTemplates", {
-      userId,
+      userId: wsCtx.userId,
+      workspaceId: wsCtx.workspaceId,
       category: args.category.trim(),
       title: args.title.trim(),
       workstream: args.workstream,
@@ -96,9 +100,9 @@ export const updateTemplate = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { templateId, ...updates }) => {
-    const userId = await getAuthUserId(ctx);
+    const wsCtx = await requireOwner(ctx);
     const tmpl = await ctx.db.get(templateId);
-    if (!tmpl || tmpl.userId !== userId) throw new Error("Template not found");
+    if (!tmpl || tmpl.workspaceId !== wsCtx.workspaceId) throw new Error("Template not found");
 
     const patch: Record<string, unknown> = {};
     if (updates.title !== undefined) {
@@ -141,9 +145,9 @@ export const deleteTemplate = mutation({
   args: { templateId: v.id("taskTemplates") },
   returns: v.null(),
   handler: async (ctx, { templateId }) => {
-    const userId = await getAuthUserId(ctx);
+    const wsCtx = await requireOwner(ctx);
     const tmpl = await ctx.db.get(templateId);
-    if (!tmpl || tmpl.userId !== userId) throw new Error("Template not found");
+    if (!tmpl || tmpl.workspaceId !== wsCtx.workspaceId) throw new Error("Template not found");
     await ctx.db.delete(templateId);
     return null;
   },
@@ -155,10 +159,12 @@ export const seedDefaults = mutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
+    const wsCtx = await requireOwner(ctx);
     const existing = await ctx.db
       .query("taskTemplates")
-      .withIndex("by_userId_category", (q) => q.eq("userId", userId))
+      .withIndex("by_workspaceId_category", (q) =>
+        q.eq("workspaceId", wsCtx.workspaceId),
+      )
       .first();
     if (existing) return null;
 
@@ -166,7 +172,8 @@ export const seedDefaults = mutation({
       let sortOrder = 1000;
       for (const tmpl of cat.templates) {
         await ctx.db.insert("taskTemplates", {
-          userId,
+          userId: wsCtx.userId,
+          workspaceId: wsCtx.workspaceId,
           category: cat.label,
           title: tmpl.title,
           workstream: tmpl.workstream,
@@ -199,7 +206,7 @@ export const createFromTemplate = mutation({
   },
   returns: v.id("tasks"),
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
+    const wsCtx = await requireOwner(ctx);
 
     // Recurring tasks need a dueDate to function — default to today if not provided
     let dueDate = args.dueDate;
@@ -209,7 +216,7 @@ export const createFromTemplate = mutation({
       dueDate = now.getTime();
     }
 
-    const taskId = await insertTaskCore(ctx, userId, {
+    const taskId = await insertTaskCore(ctx, wsCtx.userId, {
       title: args.title,
       workstream: args.workstream,
       priority: args.priority,
@@ -218,6 +225,7 @@ export const createFromTemplate = mutation({
       notes: args.notes,
       dueDate,
       assignedStaffId: args.assignedStaffId,
+      workspaceId: wsCtx.workspaceId,
     });
 
     if (args.subtasks && args.subtasks.length > 0) {
@@ -226,7 +234,8 @@ export const createFromTemplate = mutation({
       for (const title of capped) {
         await ctx.db.insert("subtasks", {
           parentTaskId: taskId,
-          userId,
+          userId: wsCtx.userId,
+          workspaceId: wsCtx.workspaceId,
           title: title.trim().slice(0, 200),
           isComplete: false,
           sortOrder: nextOrder,

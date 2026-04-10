@@ -8,8 +8,10 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Icon } from "@/components/ui/Icon";
 import { NotificationToggle } from "@/components/pwa/NotificationToggle";
 import { TIMEZONE_OPTIONS } from "@/lib/constants";
+import { useWorkspace } from "@/hooks/useWorkspace";
 
 export default function SettingsPage() {
+  const { isOwner } = useWorkspace();
   const user = useQuery(api.users.getMe);
   const updateSettings = useMutation(api.users.updateSettings);
   const generateToken = useMutation(api.users.generateTelegramLinkToken);
@@ -123,31 +125,33 @@ export default function SettingsPage() {
           </select>
         </Section>
 
-        {/* Daily Digest */}
-        <Section title="Daily Digest">
-          <p className="text-[12px] text-text-muted mb-2">
-            Receive a daily task summary via Telegram at this time.
-          </p>
-          <input
-            type="time"
-            value={user.digestTime ?? ""}
-            onChange={(e) => handleDigestTime(e.target.value)}
-            disabled={saving === "digest"}
-            className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
-          />
-          {user.digestTime && (
-            <button
-              type="button"
-              onClick={() => handleDigestTime("")}
-              className="mt-2 text-[12px] text-text-muted hover:text-text-secondary transition-colors"
-            >
-              Disable digest
-            </button>
-          )}
-        </Section>
+        {/* Daily Digest — owner only */}
+        {isOwner && (
+          <Section title="Daily Digest">
+            <p className="text-[12px] text-text-muted mb-2">
+              Receive a daily task summary via Telegram at this time.
+            </p>
+            <input
+              type="time"
+              value={user.digestTime ?? ""}
+              onChange={(e) => handleDigestTime(e.target.value)}
+              disabled={saving === "digest"}
+              className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
+            />
+            {user.digestTime && (
+              <button
+                type="button"
+                onClick={() => handleDigestTime("")}
+                className="mt-2 text-[12px] text-text-muted hover:text-text-secondary transition-colors"
+              >
+                Disable digest
+              </button>
+            )}
+          </Section>
+        )}
 
-        {/* Telegram */}
-        <Section title="Telegram">
+        {/* Telegram — owner only */}
+        {isOwner && <Section title="Telegram">
           {user.isTelegramLinked ? (
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -189,7 +193,7 @@ export default function SettingsPage() {
               </button>
             </div>
           )}
-        </Section>
+        </Section>}
 
         {/* Push Notifications */}
         <Section title="Notifications">
@@ -208,7 +212,7 @@ export default function SettingsPage() {
               Sign out
             </button>
 
-            {deleteConfirm ? (
+            {isOwner && (deleteConfirm ? (
               <div className="flex gap-3">
                 <button
                   type="button"
@@ -233,7 +237,7 @@ export default function SettingsPage() {
               >
                 Delete account
               </button>
-            )}
+            ))}
           </div>
         </Section>
       </div>

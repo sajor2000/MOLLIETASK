@@ -5,7 +5,7 @@ import type { Workstream, Priority, Recurring } from "@/lib/constants";
 
 interface WorkstreamPickerProps {
   value: Workstream;
-  onChange: (ws: Workstream) => void;
+  onChange?: (ws: Workstream) => void;
 }
 
 export function WorkstreamPicker({ value, onChange }: WorkstreamPickerProps) {
@@ -16,12 +16,13 @@ export function WorkstreamPicker({ value, onChange }: WorkstreamPickerProps) {
         <button
           key={ws}
           type="button"
-          onClick={() => onChange(ws)}
+          onClick={onChange ? () => onChange(ws) : undefined}
+          disabled={!onChange}
           className={`flex-1 py-1.5 text-[13px] rounded-[4px] transition-all duration-200 ${
             value === ws
               ? "bg-surface text-accent"
               : "text-text-muted hover:text-text-secondary"
-          }`}
+          } ${!onChange ? "cursor-default" : ""}`}
         >
           {WORKSTREAM_CONFIG[ws].label}
         </button>
@@ -32,7 +33,7 @@ export function WorkstreamPicker({ value, onChange }: WorkstreamPickerProps) {
 
 interface PriorityPickerProps {
   value: Priority;
-  onChange: (p: Priority) => void;
+  onChange?: (p: Priority) => void;
 }
 
 export function PriorityPicker({ value, onChange }: PriorityPickerProps) {
@@ -42,14 +43,15 @@ export function PriorityPicker({ value, onChange }: PriorityPickerProps) {
         <button
           key={p}
           type="button"
-          onClick={() => onChange(p)}
+          onClick={onChange ? () => onChange(p) : undefined}
+          disabled={!onChange}
           className={`flex-1 py-1.5 text-[13px] rounded-[4px] transition-all duration-200 ${
             value === p
               ? p === "high"
                 ? "bg-destructive/15 text-destructive"
                 : "bg-surface text-text-primary"
               : "text-text-muted hover:text-text-secondary"
-          }`}
+          } ${!onChange ? "cursor-default" : ""}`}
         >
           {p === "high" ? "High" : "Normal"}
         </button>

@@ -2,8 +2,6 @@
 
 import { DEFAULT_TIMEZONE } from "./constants";
 
-const DEFAULT_TZ = DEFAULT_TIMEZONE;
-
 type TaskForDisplay = {
   _id: string;
   title: string;
@@ -53,7 +51,7 @@ export function formatTaskList(tasks: TaskForDisplay[], tz?: string): string {
 function formatDue(dueDate?: number, dueTime?: string, tz?: string): string {
   if (!dueDate) return "";
   const d = new Date(dueDate);
-  const timeZone = tz ?? DEFAULT_TZ;
+  const timeZone = tz ?? DEFAULT_TIMEZONE;
   const month = d.toLocaleString("en-US", { month: "short", timeZone });
   const day = d.toLocaleString("en-US", { day: "numeric", timeZone });
   const time = dueTime ? ` ${dueTime}` : "";
@@ -75,7 +73,7 @@ export function formatSnoozeConfirmation(title: string, newReminderAt: number, t
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
-    timeZone: tz ?? DEFAULT_TZ,
+    timeZone: tz ?? DEFAULT_TIMEZONE,
   });
   return `\u23f0 Snoozed: ${title} \u2014 reminder at ${time}`;
 }

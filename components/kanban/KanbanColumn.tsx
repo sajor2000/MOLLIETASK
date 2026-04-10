@@ -18,6 +18,7 @@ interface KanbanColumnProps {
   onEditTask: (task: Doc<"tasks">) => void;
   onCompleteTask: (taskId: Id<"tasks">) => void;
   onClearCompleted?: () => void;
+  draggable?: boolean;
 }
 
 export const KanbanColumn = memo(function KanbanColumn({
@@ -27,6 +28,7 @@ export const KanbanColumn = memo(function KanbanColumn({
   onEditTask,
   onCompleteTask,
   onClearCompleted,
+  draggable = true,
 }: KanbanColumnProps) {
   const config = STATUS_CONFIG[status];
   const { setNodeRef, isOver } = useDroppable({ id: status });
@@ -100,6 +102,7 @@ export const KanbanColumn = memo(function KanbanColumn({
                 assigneeInitials={staff ? staffInitials(staff.name) : undefined}
                 onEdit={onEditTask}
                 onComplete={onCompleteTask}
+                draggable={draggable}
               />
             );
           })}

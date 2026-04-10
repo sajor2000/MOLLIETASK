@@ -4,13 +4,19 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV_ITEMS } from "@/lib/constants";
 import { Icon } from "@/components/ui/Icon";
+import { useWorkspace } from "@/hooks/useWorkspace";
 
 export function BottomNav() {
   const pathname = usePathname();
+  const { isMember } = useWorkspace();
+
+  const visibleItems = isMember
+    ? NAV_ITEMS.filter((item) => !item.ownerOnly)
+    : NAV_ITEMS;
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex justify-around items-center h-[56px] bg-surface/80 backdrop-blur-[20px] border-t border-border safe-area-bottom">
-      {NAV_ITEMS.map((item) => {
+      {visibleItems.map((item) => {
         const isActive =
           item.href === "/"
             ? pathname === "/"

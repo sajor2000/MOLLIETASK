@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { workstreamValidator } from "./schema";
+import { workstreamValidator, workspaceRoleValidator } from "./schema";
 import { getAuthUserId, storeUser } from "./authHelpers";
 import { deleteTaskAttachments } from "./tasks";
 import { validateTimezone, validateDigestTime } from "./validation";
@@ -12,10 +12,14 @@ export const getMe = query({
   returns: v.union(
     v.object({
       _id: v.id("users"),
+      name: v.optional(v.string()),
+      email: v.optional(v.string()),
       timezone: v.optional(v.string()),
       digestTime: v.optional(v.string()),
       isTelegramLinked: v.boolean(),
       lastUsedWorkstream: v.optional(workstreamValidator),
+      activeWorkspaceId: v.optional(v.id("workspaces")),
+      workspaceRole: v.optional(workspaceRoleValidator),
     }),
     v.null(),
   ),
@@ -28,12 +32,31 @@ export const getMe = query({
     }
     const user = await ctx.db.get(userId);
     if (!user) return null;
+
+    // Look up workspace role if user has an active workspace
+    let workspaceRole: "owner" | "member" | undefined;
+    if (user.activeWorkspaceId) {
+      const membership = await ctx.db
+        .query("workspaceMembers")
+        .withIndex("by_workspaceId_userId", (q) =>
+          q.eq("workspaceId", user.activeWorkspaceId!).eq("userId", user._id),
+        )
+        .unique();
+      if (membership) {
+        workspaceRole = membership.role;
+      }
+    }
+
     return {
       _id: user._id,
+      name: user.name,
+      email: user.email,
       timezone: user.timezone,
       digestTime: user.digestTime,
       isTelegramLinked: !!user.telegramChatId,
       lastUsedWorkstream: user.lastUsedWorkstream,
+      activeWorkspaceId: user.activeWorkspaceId,
+      workspaceRole,
     };
   },
 });
@@ -185,6 +208,44 @@ export const deleteAccount = mutation({
       await ctx.db.delete(entry._id);
     }
 
+    // Delete workspace records (owner cascade)
+    const memberships = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .take(50);
+    for (const m of memberships) {
+      if (m.role === "owner") {
+        // Delete all members, invites, and the workspace itself
+        const wsMembers = await ctx.db
+          .query("workspaceMembers")
+          .withIndex("by_workspaceId", (q) => q.eq("workspaceId", m.workspaceId))
+          .take(100);
+        for (const wm of wsMembers) {
+          await ctx.db.delete(wm._id);
+        }
+        const wsInvites = await ctx.db
+          .query("workspaceInvites")
+          .withIndex("by_workspaceId", (q) => q.eq("workspaceId", m.workspaceId))
+          .take(100);
+        for (const inv of wsInvites) {
+          await ctx.db.delete(inv._id);
+        }
+        await ctx.db.delete(m.workspaceId);
+      } else {
+        // Member: just remove membership and unlink staff
+        await ctx.db.delete(m._id);
+      }
+    }
+
+    // Clear linkedUserId on any staff pointing to this user (if member in another workspace)
+    const linkedStaff = await ctx.db
+      .query("staffMembers")
+      .withIndex("by_linkedUserId", (q) => q.eq("linkedUserId", userId))
+      .take(50);
+    for (const s of linkedStaff) {
+      await ctx.db.patch(s._id, { linkedUserId: undefined });
+    }
+
     await ctx.db.delete(userId);
     return null;
   },
@@ -238,6 +299,41 @@ export const deleteAccountCleanup = internalMutation({
       .take(200);
     for (const entry of limits) {
       await ctx.db.delete(entry._id);
+    }
+
+    // Delete workspace records (same cascade as deleteAccount)
+    const memberships = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .take(50);
+    for (const m of memberships) {
+      if (m.role === "owner") {
+        const wsMembers = await ctx.db
+          .query("workspaceMembers")
+          .withIndex("by_workspaceId", (q) => q.eq("workspaceId", m.workspaceId))
+          .take(100);
+        for (const wm of wsMembers) {
+          await ctx.db.delete(wm._id);
+        }
+        const wsInvites = await ctx.db
+          .query("workspaceInvites")
+          .withIndex("by_workspaceId", (q) => q.eq("workspaceId", m.workspaceId))
+          .take(100);
+        for (const inv of wsInvites) {
+          await ctx.db.delete(inv._id);
+        }
+        await ctx.db.delete(m.workspaceId);
+      } else {
+        await ctx.db.delete(m._id);
+      }
+    }
+
+    const linkedStaff = await ctx.db
+      .query("staffMembers")
+      .withIndex("by_linkedUserId", (q) => q.eq("linkedUserId", userId))
+      .take(50);
+    for (const s of linkedStaff) {
+      await ctx.db.patch(s._id, { linkedUserId: undefined });
     }
 
     await ctx.db.delete(userId);

@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { mutation, internalMutation, query, MutationCtx, QueryCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { getAuthUserId } from "./authHelpers";
+import { getAuthUserId, requireOwner } from "./authHelpers";
 import { PRACTICE_TEAM_PRESET } from "./practiceTeamPreset";
 
 /** Resolve a staff row and ensure it belongs to the practice owner. */
@@ -20,6 +20,7 @@ const staffDocValidator = v.object({
   _id: v.id("staffMembers"),
   _creationTime: v.number(),
   ownerUserId: v.id("users"),
+  workspaceId: v.optional(v.id("workspaces")),
   name: v.string(),
   roleTitle: v.string(),
   bio: v.optional(v.string()),
@@ -34,11 +35,11 @@ export const listStaff = query({
   args: {},
   returns: v.array(staffDocValidator),
   handler: async (ctx) => {
-    const ownerUserId = await getAuthUserId(ctx);
+    const wsCtx = await requireOwner(ctx);
     return await ctx.db
       .query("staffMembers")
-      .withIndex("by_ownerUserId_and_sortOrder", (q) =>
-        q.eq("ownerUserId", ownerUserId),
+      .withIndex("by_workspaceId_sortOrder", (q) =>
+        q.eq("workspaceId", wsCtx.workspaceId),
       )
       .take(100);
   },
@@ -52,7 +53,7 @@ export const addStaff = mutation({
   },
   returns: v.id("staffMembers"),
   handler: async (ctx, args) => {
-    const ownerUserId = await getAuthUserId(ctx);
+    const wsCtx = await requireOwner(ctx);
     const trimmedName = args.name.trim();
     const trimmedRole = args.roleTitle.trim();
     if (!trimmedName) throw new Error("Name is required");
@@ -66,7 +67,7 @@ export const addStaff = mutation({
     const MAX_STAFF = 100;
     const rows = await ctx.db
       .query("staffMembers")
-      .withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", ownerUserId))
+      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", wsCtx.workspaceId))
       .take(MAX_STAFF + 1);
     if (rows.length >= MAX_STAFF) {
       throw new Error(`Maximum ${MAX_STAFF} team members`);
@@ -75,7 +76,8 @@ export const addStaff = mutation({
     const sortOrder = maxSort > 0 ? maxSort + 1000 : 1000;
 
     return await ctx.db.insert("staffMembers", {
-      ownerUserId,
+      ownerUserId: wsCtx.userId,
+      workspaceId: wsCtx.workspaceId,
       name: trimmedName,
       roleTitle: trimmedRole,
       sortOrder,
@@ -94,8 +96,8 @@ export const updateStaff = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { staffId, name, roleTitle, bio }) => {
-    const ownerUserId = await getAuthUserId(ctx);
-    const row = await getStaffOwnedBy(ctx, staffId, ownerUserId);
+    const wsCtx = await requireOwner(ctx);
+    const row = await getStaffOwnedBy(ctx, staffId, wsCtx.userId);
     if (!row) throw new Error("Staff member not found");
 
     const patch: Partial<{
@@ -134,15 +136,15 @@ export const deleteStaff = mutation({
   args: { staffId: v.id("staffMembers") },
   returns: v.null(),
   handler: async (ctx, { staffId }) => {
-    const ownerUserId = await getAuthUserId(ctx);
-    const row = await getStaffOwnedBy(ctx, staffId, ownerUserId);
+    const wsCtx = await requireOwner(ctx);
+    const row = await getStaffOwnedBy(ctx, staffId, wsCtx.userId);
     if (!row) throw new Error("Staff member not found");
 
     const BATCH = 100;
     const assigned = await ctx.db
       .query("tasks")
-      .withIndex("by_userId_assignedStaffId", (q) =>
-        q.eq("userId", ownerUserId).eq("assignedStaffId", staffId),
+      .withIndex("by_workspaceId_assignedStaffId", (q) =>
+        q.eq("workspaceId", wsCtx.workspaceId).eq("assignedStaffId", staffId),
       )
       .take(BATCH + 1);
 
@@ -151,9 +153,8 @@ export const deleteStaff = mutation({
     }
 
     if (assigned.length > BATCH) {
-      // Defer staff row deletion until all assignments are cleared
       await ctx.scheduler.runAfter(0, internal.staff.clearStaffFromTasks, {
-        ownerUserId,
+        workspaceId: wsCtx.workspaceId,
         staffId,
         deleteWhenDone: true,
       });
@@ -167,17 +168,17 @@ export const deleteStaff = mutation({
 /** Continuation: clear assignedStaffId from remaining tasks after staff deletion. */
 export const clearStaffFromTasks = internalMutation({
   args: {
-    ownerUserId: v.id("users"),
+    workspaceId: v.id("workspaces"),
     staffId: v.id("staffMembers"),
     deleteWhenDone: v.optional(v.boolean()),
   },
   returns: v.null(),
-  handler: async (ctx, { ownerUserId, staffId, deleteWhenDone }) => {
+  handler: async (ctx, { workspaceId, staffId, deleteWhenDone }) => {
     const BATCH = 100;
     const assigned = await ctx.db
       .query("tasks")
-      .withIndex("by_userId_assignedStaffId", (q) =>
-        q.eq("userId", ownerUserId).eq("assignedStaffId", staffId),
+      .withIndex("by_workspaceId_assignedStaffId", (q) =>
+        q.eq("workspaceId", workspaceId).eq("assignedStaffId", staffId),
       )
       .take(BATCH + 1);
 
@@ -187,12 +188,11 @@ export const clearStaffFromTasks = internalMutation({
 
     if (assigned.length > BATCH) {
       await ctx.scheduler.runAfter(0, internal.staff.clearStaffFromTasks, {
-        ownerUserId,
+        workspaceId,
         staffId,
         deleteWhenDone,
       });
     } else if (deleteWhenDone) {
-      // All assignments cleared — safe to delete the staff row
       const staffRow = await ctx.db.get(staffId);
       if (staffRow) {
         await ctx.db.delete(staffId);
@@ -208,11 +208,11 @@ export const reorderStaff = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { orderedIds }) => {
-    const ownerUserId = await getAuthUserId(ctx);
+    const wsCtx = await requireOwner(ctx);
 
     const allRows = await ctx.db
       .query("staffMembers")
-      .withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", ownerUserId))
+      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", wsCtx.workspaceId))
       .take(101);
     if (allRows.length > 100) {
       throw new Error(
@@ -246,10 +246,10 @@ export const seedPresetTeamIfEmpty = mutation({
   args: {},
   returns: v.number(),
   handler: async (ctx) => {
-    const ownerUserId = await getAuthUserId(ctx);
+    const wsCtx = await requireOwner(ctx);
     const existing = await ctx.db
       .query("staffMembers")
-      .withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", ownerUserId))
+      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", wsCtx.workspaceId))
       .take(1);
     if (existing.length > 0) {
       throw new Error(
@@ -261,7 +261,8 @@ export const seedPresetTeamIfEmpty = mutation({
     const now = Date.now();
     for (const row of PRACTICE_TEAM_PRESET) {
       await ctx.db.insert("staffMembers", {
-        ownerUserId,
+        ownerUserId: wsCtx.userId,
+        workspaceId: wsCtx.workspaceId,
         name: row.name,
         roleTitle: row.roleTitle,
         bio: row.bio,

@@ -8,7 +8,12 @@ import {
   statusValidator,
   recurringValidator,
 } from "./schema";
-import { getAuthUserId } from "./authHelpers";
+import {
+  getAuthUserId,
+  getWorkspaceContext,
+  requireOwner,
+  canUpdateTaskStatus,
+} from "./authHelpers";
 import { getStaffOwnedBy } from "./staff";
 import { enforceRateLimit } from "./rateLimit";
 
@@ -16,6 +21,7 @@ const taskDocValidator = v.object({
   _id: v.id("tasks"),
   _creationTime: v.number(),
   userId: v.id("users"),
+  workspaceId: v.optional(v.id("workspaces")),
   title: v.string(),
   workstream: workstreamValidator,
   priority: priorityValidator,
@@ -41,19 +47,39 @@ export const getTasksByStatus = query({
   args: { status: v.optional(statusValidator) },
   returns: v.array(taskDocValidator),
   handler: async (ctx, { status }) => {
-    const userId = await getAuthUserId(ctx);
-    if (status) {
+    const wsCtx = await getWorkspaceContext(ctx);
+
+    if (wsCtx.role === "owner") {
+      if (status) {
+        return await ctx.db
+          .query("tasks")
+          .withIndex("by_workspaceId_status_sortOrder", (q) =>
+            q.eq("workspaceId", wsCtx.workspaceId).eq("status", status),
+          )
+          .take(500);
+      }
       return await ctx.db
         .query("tasks")
-        .withIndex("by_userId_status_sortOrder", (q) =>
-          q.eq("userId", userId).eq("status", status),
+        .withIndex("by_workspaceId_status_sortOrder", (q) =>
+          q.eq("workspaceId", wsCtx.workspaceId),
         )
         .take(500);
     }
-    return await ctx.db
+
+    // Member: only assigned practice tasks
+    if (!wsCtx.staffMemberId) return [];
+    const staffId = wsCtx.staffMemberId;
+    const tasks = await ctx.db
       .query("tasks")
-      .withIndex("by_userId_status_sortOrder", (q) => q.eq("userId", userId))
+      .withIndex("by_workspaceId_assignedStaffId", (q) =>
+        q
+          .eq("workspaceId", wsCtx.workspaceId)
+          .eq("assignedStaffId", staffId),
+      )
       .take(500);
+    return tasks.filter(
+      (t) => t.workstream === "practice" && (!status || t.status === status),
+    );
   },
 });
 
@@ -61,9 +87,17 @@ export const getTask = query({
   args: { taskId: v.id("tasks") },
   returns: v.union(taskDocValidator, v.null()),
   handler: async (ctx, { taskId }) => {
-    const userId = await getAuthUserId(ctx);
+    const wsCtx = await getWorkspaceContext(ctx);
     const task = await ctx.db.get(taskId);
-    if (!task || task.userId !== userId) return null;
+    if (!task || task.workspaceId !== wsCtx.workspaceId) return null;
+    // Members can only see assigned practice tasks
+    if (wsCtx.role === "member") {
+      if (
+        task.workstream !== "practice" ||
+        task.assignedStaffId !== wsCtx.staffMemberId
+      )
+        return null;
+    }
     return task;
   },
 });
@@ -99,17 +133,25 @@ export async function completeTaskCore(
 
   let nextTaskId: Id<"tasks"> | null = null;
   if (task.recurring && task.dueDate) {
-    // Skip recurring clone if user is at task cap
+    // Skip recurring clone if workspace is at task cap
     const taskCount = (
-      await ctx.db
-        .query("tasks")
-        .withIndex("by_userId_status_sortOrder", (q) => q.eq("userId", task.userId))
-        .take(1001)
+      task.workspaceId
+        ? await ctx.db
+            .query("tasks")
+            .withIndex("by_workspaceId_status_sortOrder", (q) =>
+              q.eq("workspaceId", task.workspaceId!),
+            )
+            .take(1001)
+        : await ctx.db
+            .query("tasks")
+            .withIndex("by_userId_status_sortOrder", (q) => q.eq("userId", task.userId))
+            .take(1001)
     ).length;
     if (taskCount < 1000) {
     const nextDueDate = computeNextDueDate(task.dueDate, task.recurring);
     nextTaskId = await ctx.db.insert("tasks", {
       userId: task.userId,
+      workspaceId: task.workspaceId,
       title: task.title,
       workstream: task.workstream,
       priority: task.priority,
@@ -128,6 +170,7 @@ export async function completeTaskCore(
         await ctx.db.insert("subtasks", {
           parentTaskId: nextTaskId,
           userId: task.userId,
+          workspaceId: task.workspaceId,
           title: subtask.title,
           isComplete: false,
           sortOrder: subtask.sortOrder,
@@ -175,6 +218,7 @@ export async function insertTaskCore(
     recurring?: Doc<"tasks">["recurring"];
     notes?: string;
     assignedStaffId?: Id<"staffMembers">;
+    workspaceId?: Id<"workspaces">;
   },
 ): Promise<Id<"tasks">> {
   const trimmedTitle = fields.title.trim();
@@ -185,12 +229,19 @@ export async function insertTaskCore(
   if (fields.dueTime && !/^\d{2}:\d{2}$/.test(fields.dueTime))
     throw new Error("dueTime must be HH:MM");
 
-  // Cap total tasks per user to prevent unbounded growth
+  // Cap total tasks per workspace to prevent unbounded growth
   const taskCount = (
-    await ctx.db
-      .query("tasks")
-      .withIndex("by_userId_status_sortOrder", (q) => q.eq("userId", userId))
-      .take(1001)
+    fields.workspaceId
+      ? await ctx.db
+          .query("tasks")
+          .withIndex("by_workspaceId_status_sortOrder", (q) =>
+            q.eq("workspaceId", fields.workspaceId!),
+          )
+          .take(1001)
+      : await ctx.db
+          .query("tasks")
+          .withIndex("by_userId_status_sortOrder", (q) => q.eq("userId", userId))
+          .take(1001)
   ).length;
   if (taskCount >= 1000) {
     throw new Error("Task limit reached (1000). Delete some tasks to continue.");
@@ -204,17 +255,26 @@ export async function insertTaskCore(
     assignedStaffId = fields.assignedStaffId;
   }
 
-  const lastInColumn = await ctx.db
-    .query("tasks")
-    .withIndex("by_userId_status_sortOrder", (q) =>
-      q.eq("userId", userId).eq("status", fields.status),
-    )
-    .order("desc")
-    .first();
+  const lastInColumn = fields.workspaceId
+    ? await ctx.db
+        .query("tasks")
+        .withIndex("by_workspaceId_status_sortOrder", (q) =>
+          q.eq("workspaceId", fields.workspaceId!).eq("status", fields.status),
+        )
+        .order("desc")
+        .first()
+    : await ctx.db
+        .query("tasks")
+        .withIndex("by_userId_status_sortOrder", (q) =>
+          q.eq("userId", userId).eq("status", fields.status),
+        )
+        .order("desc")
+        .first();
   const sortOrder = lastInColumn ? lastInColumn.sortOrder + 1000 : 1000;
 
   const taskId = await ctx.db.insert("tasks", {
     userId,
+    ...(fields.workspaceId ? { workspaceId: fields.workspaceId } : {}),
     title: trimmedTitle,
     workstream: fields.workstream,
     priority: fields.priority,
@@ -249,9 +309,9 @@ export const addTask = mutation({
   },
   returns: v.id("tasks"),
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    await enforceRateLimit(ctx, userId, "addTask", 500);
-    const taskId = await insertTaskCore(ctx, userId, {
+    const wsCtx = await requireOwner(ctx);
+    await enforceRateLimit(ctx, wsCtx.userId, "addTask", 500);
+    const taskId = await insertTaskCore(ctx, wsCtx.userId, {
       title: args.title,
       workstream: args.workstream,
       priority: args.priority,
@@ -261,6 +321,7 @@ export const addTask = mutation({
       recurring: args.recurring,
       notes: args.notes,
       assignedStaffId: args.assignedStaffId,
+      workspaceId: wsCtx.workspaceId,
     });
 
     if (args.reminderAt) {
@@ -294,10 +355,10 @@ export const updateTask = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { taskId, assignedStaffId, ...updates }) => {
-    const userId = await getAuthUserId(ctx);
+    const wsCtx = await requireOwner(ctx);
 
     const task = await ctx.db.get(taskId);
-    if (!task || task.userId !== userId) {
+    if (!task || task.workspaceId !== wsCtx.workspaceId) {
       throw new Error("Task not found");
     }
 
@@ -333,7 +394,7 @@ export const updateTask = mutation({
       if (assignedStaffId === null) {
         patch.assignedStaffId = undefined;
       } else {
-        if (!(await getStaffOwnedBy(ctx, assignedStaffId, userId))) {
+        if (!(await getStaffOwnedBy(ctx, assignedStaffId, wsCtx.userId))) {
           throw new Error("Invalid assignee");
         }
         patch.assignedStaffId = assignedStaffId;
@@ -353,8 +414,8 @@ export const updateTask = mutation({
       // Recompute sortOrder for the target column
       const lastInTarget = await ctx.db
         .query("tasks")
-        .withIndex("by_userId_status_sortOrder", (q) =>
-          q.eq("userId", userId).eq("status", newStatus),
+        .withIndex("by_workspaceId_status_sortOrder", (q) =>
+          q.eq("workspaceId", wsCtx.workspaceId).eq("status", newStatus),
         )
         .order("desc")
         .first();
@@ -375,7 +436,7 @@ export const updateTask = mutation({
     await ctx.db.patch(taskId, patch);
 
     if (updates.workstream) {
-      await ctx.db.patch(userId, { lastUsedWorkstream: updates.workstream });
+      await ctx.db.patch(wsCtx.userId, { lastUsedWorkstream: updates.workstream });
     }
 
     return null;
@@ -388,10 +449,10 @@ export const deleteTask = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { taskId }) => {
-    const userId = await getAuthUserId(ctx);
+    const wsCtx = await requireOwner(ctx);
 
     const task = await ctx.db.get(taskId);
-    if (!task || task.userId !== userId) {
+    if (!task || task.workspaceId !== wsCtx.workspaceId) {
       throw new Error("Task not found");
     }
 
@@ -422,11 +483,14 @@ export const completeTask = mutation({
   },
   returns: v.union(v.id("tasks"), v.null()),
   handler: async (ctx, { taskId }) => {
-    const userId = await getAuthUserId(ctx);
+    const wsCtx = await getWorkspaceContext(ctx);
 
     const task = await ctx.db.get(taskId);
-    if (!task || task.userId !== userId) {
+    if (!task || task.workspaceId !== wsCtx.workspaceId) {
       throw new Error("Task not found");
+    }
+    if (!canUpdateTaskStatus(wsCtx, task)) {
+      throw new Error("Not authorized to complete this task");
     }
 
     const result = await completeTaskCore(ctx, task);
@@ -442,10 +506,10 @@ export const uncompleteTask = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { taskId, previousStatus, spawnedTaskId }) => {
-    const userId = await getAuthUserId(ctx);
+    const wsCtx = await requireOwner(ctx);
 
     const task = await ctx.db.get(taskId);
-    if (!task || task.userId !== userId) {
+    if (!task || task.workspaceId !== wsCtx.workspaceId) {
       throw new Error("Task not found");
     }
 
@@ -457,7 +521,7 @@ export const uncompleteTask = mutation({
     // Clean up spawned recurring copy on undo
     if (spawnedTaskId) {
       const spawned = await ctx.db.get(spawnedTaskId);
-      if (spawned && spawned.userId === userId) {
+      if (spawned && spawned.workspaceId === wsCtx.workspaceId) {
         const subtasks = await ctx.db
           .query("subtasks")
           .withIndex("by_parentTaskId_and_sortOrder", (q) =>
@@ -488,10 +552,10 @@ export const reorderTask = mutation({
       throw new Error("Invalid sort order");
     }
 
-    const userId = await getAuthUserId(ctx);
+    const wsCtx = await requireOwner(ctx);
 
     const task = await ctx.db.get(taskId);
-    if (!task || task.userId !== userId) {
+    if (!task || task.workspaceId !== wsCtx.workspaceId) {
       throw new Error("Task not found");
     }
 
@@ -507,15 +571,15 @@ export const reorderTask = mutation({
       // Schedule rebalance if sort order gap is dangerously small
       const prevNeighbor = await ctx.db
         .query("tasks")
-        .withIndex("by_userId_status_sortOrder", (q) =>
-          q.eq("userId", userId).eq("status", newStatus).lt("sortOrder", newSortOrder),
+        .withIndex("by_workspaceId_status_sortOrder", (q) =>
+          q.eq("workspaceId", wsCtx.workspaceId).eq("status", newStatus).lt("sortOrder", newSortOrder),
         )
         .order("desc")
         .first();
       const nextNeighbor = await ctx.db
         .query("tasks")
-        .withIndex("by_userId_status_sortOrder", (q) =>
-          q.eq("userId", userId).eq("status", newStatus).gt("sortOrder", newSortOrder),
+        .withIndex("by_workspaceId_status_sortOrder", (q) =>
+          q.eq("workspaceId", wsCtx.workspaceId).eq("status", newStatus).gt("sortOrder", newSortOrder),
         )
         .first();
 
@@ -525,7 +589,7 @@ export const reorderTask = mutation({
 
       if (needsRebalance) {
         await ctx.scheduler.runAfter(0, internal.tasks.rebalanceSortOrders, {
-          userId,
+          workspaceId: wsCtx.workspaceId,
           status: newStatus,
         });
       }
@@ -539,13 +603,13 @@ export const deleteCompletedTasks = mutation({
   args: {},
   returns: v.object({ deleted: v.number() }),
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
+    const wsCtx = await requireOwner(ctx);
 
     const BATCH = 10;
     const completed = await ctx.db
       .query("tasks")
-      .withIndex("by_userId_status_sortOrder", (q) =>
-        q.eq("userId", userId).eq("status", "done"),
+      .withIndex("by_workspaceId_status_sortOrder", (q) =>
+        q.eq("workspaceId", wsCtx.workspaceId).eq("status", "done"),
       )
       .take(BATCH + 1);
 
@@ -567,7 +631,7 @@ export const deleteCompletedTasks = mutation({
     // Schedule continuation server-side so client isn't blocked
     if (completed.length > BATCH) {
       await ctx.scheduler.runAfter(0, internal.tasks.deleteCompletedTasksBatch, {
-        userId,
+        workspaceId: wsCtx.workspaceId,
       });
     }
 
@@ -577,14 +641,14 @@ export const deleteCompletedTasks = mutation({
 
 /** Server-side continuation for bulk delete — avoids blocking the client. */
 export const deleteCompletedTasksBatch = internalMutation({
-  args: { userId: v.id("users") },
+  args: { workspaceId: v.id("workspaces") },
   returns: v.null(),
-  handler: async (ctx, { userId }) => {
+  handler: async (ctx, { workspaceId }) => {
     const BATCH = 10;
     const completed = await ctx.db
       .query("tasks")
-      .withIndex("by_userId_status_sortOrder", (q) =>
-        q.eq("userId", userId).eq("status", "done"),
+      .withIndex("by_workspaceId_status_sortOrder", (q) =>
+        q.eq("workspaceId", workspaceId).eq("status", "done"),
       )
       .take(BATCH + 1);
 
@@ -605,9 +669,44 @@ export const deleteCompletedTasksBatch = internalMutation({
 
     if (completed.length > BATCH) {
       await ctx.scheduler.runAfter(0, internal.tasks.deleteCompletedTasksBatch, {
-        userId,
+        workspaceId,
       });
     }
+    return null;
+  },
+});
+
+// ── Staff-accessible status update ──────────────────
+
+/** Minimal status mutation for staff members. Owner can also use this. */
+export const updateTaskStatus = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    status: statusValidator,
+  },
+  returns: v.union(v.id("tasks"), v.null()),
+  handler: async (ctx, { taskId, status }) => {
+    const wsCtx = await getWorkspaceContext(ctx);
+
+    const task = await ctx.db.get(taskId);
+    if (!task || task.workspaceId !== wsCtx.workspaceId) {
+      throw new Error("Task not found");
+    }
+    if (!canUpdateTaskStatus(wsCtx, task)) {
+      throw new Error("Not authorized to update this task");
+    }
+
+    if (status === "done" && task.status !== "done") {
+      const result = await completeTaskCore(ctx, task);
+      return result.nextTaskId;
+    }
+
+    const patch: Partial<Doc<"tasks">> = { status };
+    if (task.status === "done") {
+      patch.completedAt = undefined;
+    }
+
+    await ctx.db.patch(taskId, patch);
     return null;
   },
 });
@@ -616,19 +715,19 @@ export const deleteCompletedTasksBatch = internalMutation({
 
 export const rebalanceSortOrders = internalMutation({
   args: {
-    userId: v.id("users"),
+    workspaceId: v.id("workspaces"),
     status: statusValidator,
     startOffset: v.optional(v.number()),
   },
   returns: v.null(),
-  handler: async (ctx, { userId, status, startOffset }) => {
+  handler: async (ctx, { workspaceId, status, startOffset }) => {
     const BATCH = 500;
     const offset = startOffset ?? 0;
 
     const tasks = await ctx.db
       .query("tasks")
-      .withIndex("by_userId_status_sortOrder", (q) =>
-        q.eq("userId", userId).eq("status", status),
+      .withIndex("by_workspaceId_status_sortOrder", (q) =>
+        q.eq("workspaceId", workspaceId).eq("status", status),
       )
       .take(BATCH + 1);
 
@@ -642,7 +741,7 @@ export const rebalanceSortOrders = internalMutation({
 
     if (tasks.length > BATCH) {
       await ctx.scheduler.runAfter(0, internal.tasks.rebalanceSortOrders, {
-        userId,
+        workspaceId,
         status,
         startOffset: offset + BATCH,
       });

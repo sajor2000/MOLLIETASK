@@ -16,9 +16,10 @@ interface TaskFormProps {
   staffMembers?: Doc<"staffMembers">[];
   /** When set, assignee digit hotkeys listen on this node only (task modal). */
   hotkeyRoot?: HTMLElement | null;
-  onSave: (data: TaskFormData) => void | Promise<void>;
+  onSave?: (data: TaskFormData) => void | Promise<void>;
   onDelete?: () => void;
   onClose: () => void;
+  readOnly?: boolean;
   children?: React.ReactNode;
 }
 
@@ -30,6 +31,7 @@ export function TaskForm({
   onSave,
   onDelete,
   onClose,
+  readOnly = false,
   children,
 }: TaskFormProps) {
   const [title, setTitle] = useState(task?.title ?? prefill?.title ?? "");
@@ -105,7 +107,7 @@ export function TaskForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim() || !onSave || readOnly) return;
 
     await Promise.resolve(
       onSave({
@@ -133,7 +135,8 @@ export function TaskForm({
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Task title..."
             maxLength={200}
-            autoFocus
+            autoFocus={!readOnly}
+            readOnly={readOnly}
             className="w-full bg-transparent text-[15px] text-text-primary placeholder:text-text-muted focus:outline-none py-2 border-b border-border focus:border-accent transition-colors duration-200"
           />
         </div>
@@ -143,7 +146,7 @@ export function TaskForm({
           <label className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
             Workstream
           </label>
-          <WorkstreamPicker value={workstream} onChange={setWorkstream} />
+          <WorkstreamPicker value={workstream} onChange={readOnly ? undefined : setWorkstream} />
         </div>
 
         {/* Priority toggle */}
@@ -151,7 +154,7 @@ export function TaskForm({
           <label className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
             Priority
           </label>
-          <PriorityPicker value={priority} onChange={setPriority} />
+          <PriorityPicker value={priority} onChange={readOnly ? undefined : setPriority} />
         </div>
 
         {/* Status — exclude "done" to prevent bypassing completeTaskCore */}
@@ -164,12 +167,13 @@ export function TaskForm({
               <button
                 key={s}
                 type="button"
-                onClick={() => setStatus(s)}
+                onClick={readOnly ? undefined : () => setStatus(s)}
+                disabled={readOnly}
                 className={`flex-1 py-1.5 text-[13px] rounded-[4px] transition-all duration-200 ${
                   status === s
                     ? "bg-surface text-accent"
                     : "text-text-muted hover:text-text-secondary"
-                }`}
+                } ${readOnly ? "cursor-default" : ""}`}
               >
                 {STATUS_CONFIG[s].label}
               </button>
@@ -199,7 +203,8 @@ export function TaskForm({
                   const match = staffMembers.find((s) => s._id === val);
                   setAssignedStaffId(match ? match._id : null);
                 }}
-                className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
+                disabled={readOnly}
+                className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark] disabled:opacity-60"
               >
                 <option value="">Unassigned</option>
                 {[...staffMembers]
@@ -229,6 +234,7 @@ export function TaskForm({
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
+              readOnly={readOnly}
               className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
             />
           </div>
@@ -241,13 +247,14 @@ export function TaskForm({
               value={dueTime}
               onChange={(e) => setDueTime(e.target.value)}
               disabled={!dueDate}
+              readOnly={readOnly}
               className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary disabled:opacity-40 focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
             />
           </div>
         </div>
 
         {/* Quick date shortcuts */}
-        {!dueDate && (
+        {!readOnly && !dueDate && (
           <div className="flex gap-2">
             {[
               { label: "Today", offset: 0 },
@@ -271,7 +278,7 @@ export function TaskForm({
         )}
 
         {/* Recurring */}
-        {dueDate && (
+        {!readOnly && dueDate && (
           <div>
             <label className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-2">
               Repeat
@@ -291,6 +298,7 @@ export function TaskForm({
             placeholder="Add notes..."
             maxLength={2000}
             rows={3}
+            readOnly={readOnly}
             className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 resize-none"
           />
         </div>
@@ -312,7 +320,17 @@ export function TaskForm({
 
       {/* Actions */}
       <div className="px-6 py-4 border-t border-border">
-        {showDeleteConfirm ? (
+        {readOnly ? (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              className="py-2.5 px-6 bg-surface text-text-secondary rounded-[4px] text-[13px] font-medium hover:bg-surface-elevated transition-colors duration-200"
+            >
+              Close
+            </button>
+          </div>
+        ) : showDeleteConfirm ? (
           <div className="flex gap-3">
             <button
               type="button"

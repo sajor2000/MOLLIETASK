@@ -14,6 +14,7 @@ import type * as authInternal from "../authInternal.js";
 import type * as constants from "../constants.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
+import type * as migrations from "../migrations.js";
 import type * as practiceTeamPreset from "../practiceTeamPreset.js";
 import type * as pushActions from "../pushActions.js";
 import type * as pushNotifications from "../pushNotifications.js";
@@ -29,6 +30,7 @@ import type * as telegramBot from "../telegramBot.js";
 import type * as telegramFormat from "../telegramFormat.js";
 import type * as users from "../users.js";
 import type * as validation from "../validation.js";
+import type * as workspaces from "../workspaces.js";
 
 import type {
   ApiFromModules,
@@ -43,6 +45,7 @@ declare const fullApi: ApiFromModules<{
   constants: typeof constants;
   crons: typeof crons;
   http: typeof http;
+  migrations: typeof migrations;
   practiceTeamPreset: typeof practiceTeamPreset;
   pushActions: typeof pushActions;
   pushNotifications: typeof pushNotifications;
@@ -58,6 +61,7 @@ declare const fullApi: ApiFromModules<{
   telegramFormat: typeof telegramFormat;
   users: typeof users;
   validation: typeof validation;
+  workspaces: typeof workspaces;
 }>;
 
 /**

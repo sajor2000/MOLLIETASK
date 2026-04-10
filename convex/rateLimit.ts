@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation, MutationCtx } from "./_generated/server";
+import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 
 const COOLDOWNS: Record<string, number> = {
@@ -19,6 +20,7 @@ export async function enforceRateLimit(
     .withIndex("by_userId_action", (q) =>
       q.eq("userId", userId).eq("action", action),
     )
+    .order("desc")
     .first();
   const now = Date.now();
   if (existing && now - existing.timestamp < cooldownMs) {
@@ -69,11 +71,15 @@ export const cleanupOldEntries = internalMutation({
     const entries = await ctx.db
       .query("rateLimits")
       .withIndex("by_userId_action")
-      .take(200);
+      .take(201);
     for (const entry of entries) {
       if (entry.timestamp < cutoff) {
         await ctx.db.delete(entry._id);
       }
+    }
+    // Self-schedule continuation if more entries may exist
+    if (entries.length > 200) {
+      await ctx.scheduler.runAfter(0, internal.rateLimit.cleanupOldEntries, {});
     }
     return null;
   },

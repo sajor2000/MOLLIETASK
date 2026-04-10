@@ -14,6 +14,7 @@ interface TaskCardProps {
   assigneeInitials?: string;
   onEdit: (task: Doc<"tasks">) => void;
   onComplete: (taskId: Id<"tasks">) => void;
+  draggable?: boolean;
 }
 
 export const TaskCard = memo(function TaskCard({
@@ -21,6 +22,7 @@ export const TaskCard = memo(function TaskCard({
   assigneeInitials,
   onEdit,
   onComplete,
+  draggable = true,
 }: TaskCardProps) {
   const {
     attributes,
@@ -29,7 +31,7 @@ export const TaskCard = memo(function TaskCard({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: task._id });
+  } = useSortable({ id: task._id, disabled: !draggable });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -51,14 +53,16 @@ export const TaskCard = memo(function TaskCard({
     >
       <div className="flex items-start gap-3">
         {/* Drag handle */}
-        <button
-          className="mt-0.5 shrink-0 touch-none cursor-grab active:cursor-grabbing text-text-muted/40 hover:text-text-muted transition-colors"
-          aria-label="Drag to reorder"
-          {...attributes}
-          {...listeners}
-        >
-          <Icon name="drag_indicator" className="w-[18px] h-[18px]" />
-        </button>
+        {draggable && (
+          <button
+            className="mt-0.5 shrink-0 touch-none cursor-grab active:cursor-grabbing text-text-muted/40 hover:text-text-muted transition-colors"
+            aria-label="Drag to reorder"
+            {...attributes}
+            {...listeners}
+          >
+            <Icon name="drag_indicator" className="w-[18px] h-[18px]" />
+          </button>
+        )}
 
         {/* Checkbox */}
         <button
