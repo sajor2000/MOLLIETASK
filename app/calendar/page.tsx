@@ -21,7 +21,9 @@ const MONTHS = [
 ];
 
 export default function CalendarPage() {
-  const tasks = useQuery(api.tasks.getTasksByStatus, {});
+  const todoTasks = useQuery(api.tasks.getTasksByStatus, { status: "todo" });
+  const inProgressTasks = useQuery(api.tasks.getTasksByStatus, { status: "inprogress" });
+  const tasks = todoTasks && inProgressTasks ? [...todoTasks, ...inProgressTasks] : undefined;
   const staffList = useQuery(api.staff.listStaff);
   const {
     editingTask,
@@ -53,7 +55,7 @@ export default function CalendarPage() {
 
     const map = new Map<string, Doc<"tasks">[]>();
     for (const t of tasks ?? []) {
-      if (t.status === "done" || !t.dueDate) continue;
+      if (!t.dueDate) continue;
       if (t.dueDate < rangeStart || t.dueDate > rangeEnd) continue;
       const dateStr = toCSTDateString(t.dueDate);
       const list = map.get(dateStr) ?? [];

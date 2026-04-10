@@ -9,6 +9,20 @@ import {
   formatSnoozeConfirmation,
   HELP_TEXT,
 } from "./telegramFormat";
+import { DEFAULT_TIMEZONE } from "./constants";
+
+/** Constant-time string comparison to prevent timing side-channel attacks. */
+function timingSafeEqual(a: string, b: string): boolean {
+  const encoder = new TextEncoder();
+  const bufA = encoder.encode(a);
+  const bufB = encoder.encode(b);
+  if (bufA.length !== bufB.length) return false;
+  let result = 0;
+  for (let i = 0; i < bufA.length; i++) {
+    result |= bufA[i] ^ bufB[i];
+  }
+  return result === 0;
+}
 
 const SNOOZE_DURATION_MS = 60 * 60 * 1000; // 1 hour — matches "Snooze 1hr" button label
 
@@ -145,7 +159,8 @@ http.route({
     if (!secret) {
       return new Response("Webhook secret not configured", { status: 500 });
     }
-    if (req.headers.get("X-Telegram-Bot-Api-Secret-Token") !== secret) {
+    const token = req.headers.get("X-Telegram-Bot-Api-Secret-Token") ?? "";
+    if (!timingSafeEqual(token, secret)) {
       return new Response("Unauthorized", { status: 401 });
     }
 
@@ -418,7 +433,7 @@ http.route({
     if (text === "/timezone" || text.startsWith("/timezone ")) {
       const arg = text.slice(10).trim();
       if (!arg) {
-        const tz = user.timezone ?? "America/Chicago";
+        const tz = user.timezone ?? DEFAULT_TIMEZONE;
         await reply(chatId, `Current timezone: ${tz}`);
         return new Response("OK", { status: 200 });
       }
@@ -625,7 +640,7 @@ http.route({
 
     // /today — show tasks due today
     if (text === "/today") {
-      const tz = user.timezone ?? "America/Chicago";
+      const tz = user.timezone ?? DEFAULT_TIMEZONE;
       const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: tz }); // YYYY-MM-DD
 
       const tasks = await ctx.runQuery(internal.telegramBot.getTasksForTelegram, {

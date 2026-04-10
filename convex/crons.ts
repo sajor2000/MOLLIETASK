@@ -8,6 +8,7 @@ crons.interval(
   "overdue check",
   { hours: 1 },
   internal.reminders.checkOverdue,
+  {},
 );
 
 // Check if it's time to send daily digest every 15 minutes
@@ -15,6 +16,7 @@ crons.interval(
   "digest check",
   { minutes: 15 },
   internal.reminders.checkDigest,
+  {},
 );
 
 // Clean up old rate limit entries every 6 hours

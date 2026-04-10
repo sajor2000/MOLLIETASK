@@ -35,11 +35,12 @@ export const listStaff = query({
   returns: v.array(staffDocValidator),
   handler: async (ctx) => {
     const ownerUserId = await getAuthUserId(ctx);
-    const rows = await ctx.db
+    return await ctx.db
       .query("staffMembers")
-      .withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", ownerUserId))
+      .withIndex("by_ownerUserId_and_sortOrder", (q) =>
+        q.eq("ownerUserId", ownerUserId),
+      )
       .take(100);
-    return rows.sort((a, b) => a.sortOrder - b.sortOrder);
   },
 });
 

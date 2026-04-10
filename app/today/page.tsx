@@ -15,7 +15,9 @@ import { toCSTDateString, fromDateInputValue } from "@/lib/dates";
 import { useTaskActions } from "@/hooks/useTaskActions";
 
 export default function TodayPage() {
-  const tasks = useQuery(api.tasks.getTasksByStatus, {});
+  const todoTasks = useQuery(api.tasks.getTasksByStatus, { status: "todo" });
+  const inProgressTasks = useQuery(api.tasks.getTasksByStatus, { status: "inprogress" });
+  const tasks = todoTasks && inProgressTasks ? [...todoTasks, ...inProgressTasks] : undefined;
   const staffList = useQuery(api.staff.listStaff);
   const {
     editingTask,
@@ -40,7 +42,6 @@ export default function TodayPage() {
     const noDueDate: Doc<"tasks">[] = [];
 
     for (const t of tasks ?? []) {
-      if (t.status === "done") continue;
       if (!t.dueDate) {
         noDueDate.push(t);
       } else {

@@ -10,6 +10,7 @@ import {
 } from "./schema";
 import { getAuthUserId } from "./authHelpers";
 import { getStaffOwnedBy } from "./staff";
+import { enforceRateLimit } from "./rateLimit";
 
 const taskDocValidator = v.object({
   _id: v.id("tasks"),
@@ -37,10 +38,18 @@ const taskDocValidator = v.object({
 // ── Queries ──────────────────────────────────────────
 
 export const getTasksByStatus = query({
-  args: {},
+  args: { status: v.optional(statusValidator) },
   returns: v.array(taskDocValidator),
-  handler: async (ctx) => {
+  handler: async (ctx, { status }) => {
     const userId = await getAuthUserId(ctx);
+    if (status) {
+      return await ctx.db
+        .query("tasks")
+        .withIndex("by_userId_status_sortOrder", (q) =>
+          q.eq("userId", userId).eq("status", status),
+        )
+        .take(500);
+    }
     return await ctx.db
       .query("tasks")
       .withIndex("by_userId_status_sortOrder", (q) => q.eq("userId", userId))
@@ -221,6 +230,7 @@ export const addTask = mutation({
   returns: v.id("tasks"),
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
+    await enforceRateLimit(ctx, userId, "addTask", 500);
     const taskId = await insertTaskCore(ctx, userId, {
       title: args.title,
       workstream: args.workstream,
