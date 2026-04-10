@@ -133,7 +133,7 @@ export default function SettingsPage() {
 
         {/* Telegram */}
         <Section title="Telegram">
-          {user.telegramChatId ? (
+          {user.isTelegramLinked ? (
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="inline-block w-2 h-2 rounded-full bg-success" />

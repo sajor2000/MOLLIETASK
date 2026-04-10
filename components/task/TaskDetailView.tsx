@@ -25,19 +25,39 @@ export function TaskDetailView({
   onClose,
 }: TaskDetailViewProps) {
   const [dialogEl, setDialogEl] = useState<HTMLDivElement | null>(null);
+  const [saving, setSaving] = useState(false);
   const dialogRef = useCallback((node: HTMLDivElement | null) => {
     setDialogEl(node);
   }, []);
 
-  // Use ref to avoid re-attaching listener when onClose changes
-  const onCloseRef = useRef(onClose);
+  const guardedClose = useCallback(() => {
+    if (!saving) onClose();
+  }, [saving, onClose]);
+
+  // Use ref to avoid re-attaching listener when guardedClose changes
+  const onCloseRef = useRef(guardedClose);
   useEffect(() => {
-    onCloseRef.current = onClose;
+    onCloseRef.current = guardedClose;
   });
+
+  const guardedSave = useCallback(
+    async (data: TaskFormData) => {
+      setSaving(true);
+      try {
+        await Promise.resolve(onSave(data));
+      } finally {
+        setSaving(false);
+      }
+    },
+    [onSave],
+  );
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onCloseRef.current();
+      if (e.key === "Escape" && !e.defaultPrevented) {
+        e.preventDefault();
+        onCloseRef.current();
+      }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
@@ -56,14 +76,14 @@ export function TaskDetailView({
       {/* Backdrop */}
       <div
         className="fixed inset-0 z-[60] bg-bg-base/60 backdrop-blur-sm"
-        onClick={onClose}
+        onClick={guardedClose}
       />
 
       {/* Responsive container: bottom sheet on mobile, centered modal on desktop */}
       <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-6">
         <div
           ref={dialogRef}
-          className="bg-surface-elevated border-t border-x md:border border-border rounded-t-[8px] md:rounded-[4px] w-full md:max-w-[480px] max-h-[85vh] md:max-h-[80vh] flex flex-col animate-[slideUp_200ms_ease-out] md:animate-[fadeIn_150ms_ease-out]"
+          className="bg-surface-elevated border-t border-x md:border border-border rounded-t-[8px] md:rounded-[4px] w-full md:max-w-[480px] max-h-[85dvh] md:max-h-[80vh] flex flex-col min-h-0 overflow-hidden animate-[slideUp_200ms_ease-out] md:animate-[fadeIn_150ms_ease-out]"
           role="dialog"
           aria-modal="true"
           aria-label={task ? "Edit task" : "New task"}
@@ -79,7 +99,7 @@ export function TaskDetailView({
               {task ? "Edit task" : "New task"}
             </h2>
             <button
-              onClick={onClose}
+              onClick={guardedClose}
               className="text-text-muted hover:text-text-secondary transition-colors duration-200"
             >
               <Icon name="close" className="w-5 h-5" />
@@ -92,9 +112,9 @@ export function TaskDetailView({
             prefill={prefill}
             staffMembers={staffMembers}
             hotkeyRoot={dialogEl}
-            onSave={onSave}
+            onSave={guardedSave}
             onDelete={onDelete}
-            onClose={onClose}
+            onClose={guardedClose}
           >
             {task?._id && <SubtaskList parentTaskId={task._id} />}
           </TaskForm>

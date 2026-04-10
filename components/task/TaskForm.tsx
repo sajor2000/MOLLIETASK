@@ -123,8 +123,8 @@ export function TaskForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-6">
+    <form onSubmit={handleSubmit} className="flex flex-1 flex-col min-h-0">
+      <div className="flex-1 overflow-y-auto overscroll-contain px-6 pb-6 space-y-6">
         {/* Title */}
         <div>
           <input
