@@ -9,11 +9,16 @@ export type Priority = "high" | "normal";
 
 export type Recurring = "daily" | "weekdays" | "weekly" | "monthly";
 
-export const NAV_ITEMS: ReadonlyArray<{ href: string; label: string; icon: IconName }> = [
+export const NAV_ITEMS: ReadonlyArray<{
+  href: string;
+  label: string;
+  icon: IconName;
+  ownerOnly?: boolean;
+}> = [
   { href: "/", label: "Kanban", icon: "view_kanban" },
   { href: "/today", label: "Today", icon: "wb_sunny" },
   { href: "/calendar", label: "Calendar", icon: "calendar_today" },
-  { href: "/team", label: "Team", icon: "groups" },
+  { href: "/team", label: "Team", icon: "groups", ownerOnly: true },
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 

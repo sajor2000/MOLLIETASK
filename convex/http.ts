@@ -16,10 +16,10 @@ function timingSafeEqual(a: string, b: string): boolean {
   const encoder = new TextEncoder();
   const bufA = encoder.encode(a);
   const bufB = encoder.encode(b);
-  if (bufA.length !== bufB.length) return false;
-  let result = 0;
-  for (let i = 0; i < bufA.length; i++) {
-    result |= bufA[i] ^ bufB[i];
+  const maxLen = Math.max(bufA.length, bufB.length);
+  let result = bufA.length ^ bufB.length;
+  for (let i = 0; i < maxLen; i++) {
+    result |= (bufA[i] ?? 0) ^ (bufB[i] ?? 0);
   }
   return result === 0;
 }

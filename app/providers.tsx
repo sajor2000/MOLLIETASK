@@ -39,12 +39,53 @@ function StoreUser({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * Checks for a pending invite token cookie (set by /invite/[token] route)
+ * and consumes it to join the workspace. Runs once after StoreUser.
+ */
+function ConsumeInviteToken({ children }: { children: ReactNode }) {
+  const consumeInvite = useMutation(api.workspaces.consumeInvite);
+  const consumed = useRef(false);
+
+  useEffect(() => {
+    if (consumed.current) return;
+
+    const token = document.cookie
+      .split("; ")
+      .find((c) => c.startsWith("invite_token="))
+      ?.split("=")[1];
+
+    if (!token) return;
+    consumed.current = true;
+
+    // Clear the cookie immediately
+    document.cookie = "invite_token=; path=/; max-age=0";
+
+    consumeInvite({ token })
+      .then((result) => {
+        if (result.success) {
+          // Reload to pick up new workspace context
+          window.location.reload();
+        } else {
+          console.error("Failed to consume invite:", result.error);
+        }
+      })
+      .catch((err) => {
+        console.error("Error consuming invite:", err);
+      });
+  }, [consumeInvite]);
+
+  return <>{children}</>;
+}
+
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
   return (
     <AuthKitProvider>
       <ConvexProviderWithAuth client={convex} useAuth={useAuthFromAuthKit}>
         <Authenticated>
-          <StoreUser>{children}</StoreUser>
+          <StoreUser>
+            <ConsumeInviteToken>{children}</ConsumeInviteToken>
+          </StoreUser>
         </Authenticated>
       </ConvexProviderWithAuth>
     </AuthKitProvider>

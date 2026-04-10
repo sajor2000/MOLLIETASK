@@ -10,6 +10,7 @@ import { ErrorToast } from "@/components/ui/ErrorToast";
 import type { Doc } from "@/convex/_generated/dataModel";
 import type { TaskFormData } from "@/lib/constants";
 import { useTaskActions } from "@/hooks/useTaskActions";
+import { useWorkspace } from "@/hooks/useWorkspace";
 
 const KanbanBoard = dynamic(
   () => import("@/components/kanban/KanbanBoard").then((m) => ({ default: m.KanbanBoard })),
@@ -29,6 +30,7 @@ const TemplateLibrary = dynamic(
 );
 
 export default function KanbanPage() {
+  const { isOwner, isMember } = useWorkspace();
   const tasks = useQuery(api.tasks.getTasksByStatus, {});
   const staffList = useQuery(api.staff.listStaff);
   const {
@@ -95,28 +97,30 @@ export default function KanbanPage() {
 
   return (
     <AppShell
-      onAddTask={() => setIsCreating(true)}
-      onOpenTemplates={() => setShowTemplates(true)}
+      onAddTask={isOwner ? () => setIsCreating(true) : undefined}
+      onOpenTemplates={isOwner ? () => setShowTemplates(true) : undefined}
       searchQuery={searchQuery}
       onSearchChange={setSearchQuery}
       topBarExtra={
-        <AiCaptureBar
-          tasks={tasks}
-          staffMembers={staffList ?? []}
-          onAddTask={handleAiAddTask}
-          onEditTask={handleAiEditTask}
-          onCompleteTask={handleComplete}
-        />
+        isOwner ? (
+          <AiCaptureBar
+            tasks={tasks}
+            staffMembers={staffList ?? []}
+            onAddTask={handleAiAddTask}
+            onEditTask={handleAiEditTask}
+            onCompleteTask={handleComplete}
+          />
+        ) : undefined
       }
     >
       <div className="h-[calc(100dvh-64px-56px)] md:h-[calc(100dvh-64px)]">
         <KanbanBoard
           tasks={filteredTasks ?? []}
           staffById={staffById}
-          onMoveTask={handleReorder}
+          onMoveTask={isOwner ? handleReorder : undefined}
           onEditTask={setEditingTask}
           onCompleteTask={handleComplete}
-          onClearCompleted={handleClearCompleted}
+          onClearCompleted={isOwner ? handleClearCompleted : undefined}
         />
       </div>
 
@@ -125,13 +129,14 @@ export default function KanbanPage() {
           task={editingTask}
           prefill={isCreating ? prefillData : undefined}
           staffMembers={staffList ?? []}
-          onSave={handleSave}
+          onSave={isOwner ? handleSave : undefined}
           onDelete={
-            editingTask
+            isOwner && editingTask
               ? () => handleDelete(editingTask._id)
               : undefined
           }
           onClose={handleCloseModal}
+          readOnly={isMember}
         />
       )}
 
@@ -147,7 +152,7 @@ export default function KanbanPage() {
         <ErrorToast message={errorMessage} onDismiss={clearError} />
       )}
 
-      {showTemplates && (
+      {showTemplates && isOwner && (
         <TemplateLibrary
           onClose={() => setShowTemplates(false)}
           onEditTask={(task) => {

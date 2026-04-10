@@ -26,6 +26,7 @@ import type { Id, Doc } from "@/convex/_generated/dataModel";
 
 interface SubtaskListProps {
   parentTaskId: Id<"tasks">;
+  readOnly?: boolean;
 }
 
 type Subtask = Doc<"subtasks">;
@@ -109,7 +110,7 @@ function SortableSubtaskItem({
   );
 }
 
-export function SubtaskList({ parentTaskId }: SubtaskListProps) {
+export function SubtaskList({ parentTaskId, readOnly = false }: SubtaskListProps) {
   const subtasks = useQuery(api.subtasks.getSubtasks, { parentTaskId });
   const addSubtask = useMutation(api.subtasks.addSubtask);
   const toggleSubtask = useMutation(api.subtasks.toggleSubtask);
@@ -210,33 +211,64 @@ export function SubtaskList({ parentTaskId }: SubtaskListProps) {
         )}
       </div>
 
-      {/* Subtask list with drag-and-drop */}
+      {/* Subtask list */}
       {subtasks.length > 0 && (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCorners}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-            items={subtaskIds}
-            strategy={verticalListSortingStrategy}
+        readOnly ? (
+          <div className="mb-2">
+            {subtasks.map((subtask: Subtask) => (
+              <div key={subtask._id} className="flex items-center gap-2 py-1.5">
+                <button
+                  onClick={() => handleToggle(subtask._id)}
+                  className={`shrink-0 w-[16px] h-[16px] rounded-[3px] border flex items-center justify-center transition-colors duration-200 ${
+                    subtask.isComplete
+                      ? "bg-success/20 border-success/40"
+                      : "border-text-muted/30 hover:border-accent"
+                  }`}
+                  aria-label={`${subtask.isComplete ? "Uncheck" : "Check"} ${subtask.title}`}
+                >
+                  {subtask.isComplete && (
+                    <Icon name="check" className="w-[11px] h-[11px] text-success" />
+                  )}
+                </button>
+                <span
+                  className={`flex-1 text-[13px] leading-snug min-w-0 truncate ${
+                    subtask.isComplete
+                      ? "text-text-muted line-through"
+                      : "text-text-primary"
+                  }`}
+                >
+                  {subtask.title}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCorners}
+            onDragEnd={handleDragEnd}
           >
-            <div className="mb-2">
-              {subtasks.map((subtask: Subtask) => (
-                <SortableSubtaskItem
-                  key={subtask._id}
-                  subtask={subtask}
-                  onToggle={handleToggle}
-                  onDelete={handleDelete}
-                />
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
+            <SortableContext
+              items={subtaskIds}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="mb-2">
+                {subtasks.map((subtask: Subtask) => (
+                  <SortableSubtaskItem
+                    key={subtask._id}
+                    subtask={subtask}
+                    onToggle={handleToggle}
+                    onDelete={handleDelete}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        )
       )}
 
       {/* Add subtask input */}
-      {!atMax && (
+      {!readOnly && !atMax && (
         <div className="flex items-center gap-2">
           <Icon name="add" className="w-[14px] h-[14px] text-text-muted/40 shrink-0" />
           <input
@@ -262,7 +294,7 @@ export function SubtaskList({ parentTaskId }: SubtaskListProps) {
       )}
 
       {/* AI suggest button */}
-      {!atMax && (
+      {!readOnly && !atMax && (
         <div className="mt-2">
           <SuggestStepsButton
             parentTaskId={parentTaskId}

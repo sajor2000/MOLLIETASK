@@ -14,6 +14,7 @@ import { WORKSTREAM_CONFIG } from "@/lib/constants";
 import type { TaskFormData } from "@/lib/constants";
 import { toCSTDateString, fromDateInputValue } from "@/lib/dates";
 import { useTaskActions } from "@/hooks/useTaskActions";
+import { useWorkspace } from "@/hooks/useWorkspace";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = [
@@ -22,6 +23,7 @@ const MONTHS = [
 ];
 
 export default function CalendarPage() {
+  const { isOwner, isMember } = useWorkspace();
   const todoTasks = useQuery(api.tasks.getTasksByStatus, { status: "todo" });
   const inProgressTasks = useQuery(api.tasks.getTasksByStatus, { status: "inprogress" });
   const tasks = useMemo(
@@ -222,13 +224,15 @@ export default function CalendarPage() {
                   day: "numeric",
                 })}
               </p>
-              <button
-                onClick={() => handleAddOnDate(selectedDate)}
-                className="p-1 text-text-muted hover:text-accent transition-colors"
-                aria-label="Add task on this date"
-              >
-                <Icon name="add" className="w-5 h-5" />
-              </button>
+              {isOwner && (
+                <button
+                  onClick={() => handleAddOnDate(selectedDate)}
+                  className="p-1 text-text-muted hover:text-accent transition-colors"
+                  aria-label="Add task on this date"
+                >
+                  <Icon name="add" className="w-5 h-5" />
+                </button>
+              )}
             </div>
 
             {selectedTasks.length === 0 ? (
@@ -254,9 +258,10 @@ export default function CalendarPage() {
           task={editingTask}
           prefill={createPrefill}
           staffMembers={staffList ?? []}
-          onSave={handleSave}
-          onDelete={editingTask ? () => handleDelete(editingTask._id) : undefined}
+          onSave={isOwner ? handleSave : undefined}
+          onDelete={isOwner && editingTask ? () => handleDelete(editingTask._id) : undefined}
           onClose={() => { setEditingTask(null); setIsCreating(false); }}
+          readOnly={isMember}
         />
       )}
 

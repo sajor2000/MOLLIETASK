@@ -26,6 +26,11 @@ export const recurringValidator = v.union(
   v.literal("monthly"),
 );
 
+export const workspaceRoleValidator = v.union(
+  v.literal("owner"),
+  v.literal("member"),
+);
+
 export default defineSchema({
   users: defineTable({
     tokenIdentifier: v.string(),
@@ -41,6 +46,7 @@ export default defineSchema({
     telegramLinkExpiry: v.optional(v.number()),
     lastUsedWorkstream: v.optional(workstreamValidator),
     lastDigestSentAt: v.optional(v.number()),
+    activeWorkspaceId: v.optional(v.id("workspaces")),
   })
     .index("by_tokenIdentifier", ["tokenIdentifier"])
     .index("email", ["email"])
@@ -49,6 +55,7 @@ export default defineSchema({
 
   tasks: defineTable({
     userId: v.id("users"),
+    workspaceId: v.optional(v.id("workspaces")),
     title: v.string(),
     workstream: workstreamValidator,
     priority: priorityValidator,
@@ -70,11 +77,15 @@ export default defineSchema({
   })
     .index("by_userId_status_dueDate", ["userId", "status", "dueDate"])
     .index("by_userId_status_sortOrder", ["userId", "status", "sortOrder"])
-    .index("by_userId_assignedStaffId", ["userId", "assignedStaffId"]),
+    .index("by_userId_assignedStaffId", ["userId", "assignedStaffId"])
+    .index("by_workspaceId_status_sortOrder", ["workspaceId", "status", "sortOrder"])
+    .index("by_workspaceId_status_dueDate", ["workspaceId", "status", "dueDate"])
+    .index("by_workspaceId_assignedStaffId", ["workspaceId", "assignedStaffId"]),
 
-  /** Owner-managed roster; linkedUserId reserved for future staff Google sign-in. */
+  /** Owner-managed roster; linkedUserId populated when staff joins workspace. */
   staffMembers: defineTable({
     ownerUserId: v.id("users"),
+    workspaceId: v.optional(v.id("workspaces")),
     name: v.string(),
     roleTitle: v.string(),
     /** Optional Meet-the-Team style bio (not shown on Kanban chips). */
@@ -84,11 +95,15 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_ownerUserId", ["ownerUserId"])
-    .index("by_ownerUserId_and_sortOrder", ["ownerUserId", "sortOrder"]),
+    .index("by_ownerUserId_and_sortOrder", ["ownerUserId", "sortOrder"])
+    .index("by_workspaceId", ["workspaceId"])
+    .index("by_workspaceId_sortOrder", ["workspaceId", "sortOrder"])
+    .index("by_linkedUserId", ["linkedUserId"]),
 
   subtasks: defineTable({
     parentTaskId: v.id("tasks"),
     userId: v.id("users"),
+    workspaceId: v.optional(v.id("workspaces")),
     title: v.string(),
     isComplete: v.boolean(),
     sortOrder: v.number(),
@@ -99,6 +114,7 @@ export default defineSchema({
   taskAttachments: defineTable({
     taskId: v.id("tasks"),
     userId: v.id("users"),
+    workspaceId: v.optional(v.id("workspaces")),
     storageId: v.id("_storage"),
     filename: v.optional(v.string()),
     createdAt: v.number(),
@@ -127,6 +143,7 @@ export default defineSchema({
 
   taskTemplates: defineTable({
     userId: v.id("users"),
+    workspaceId: v.optional(v.id("workspaces")),
     category: v.string(),
     title: v.string(),
     workstream: workstreamValidator,
@@ -138,5 +155,36 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_userId_category", ["userId", "category"])
-    .index("by_userId_category_sortOrder", ["userId", "category", "sortOrder"]),
+    .index("by_userId_category_sortOrder", ["userId", "category", "sortOrder"])
+    .index("by_workspaceId_category", ["workspaceId", "category"])
+    .index("by_workspaceId_category_sortOrder", ["workspaceId", "category", "sortOrder"]),
+
+  // ── Workspace tables ──────────────────────────────────
+
+  workspaces: defineTable({
+    name: v.string(),
+    ownerUserId: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_ownerUserId", ["ownerUserId"]),
+
+  workspaceMembers: defineTable({
+    workspaceId: v.id("workspaces"),
+    userId: v.id("users"),
+    role: workspaceRoleValidator,
+    joinedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_workspaceId", ["workspaceId"])
+    .index("by_workspaceId_userId", ["workspaceId", "userId"]),
+
+  workspaceInvites: defineTable({
+    workspaceId: v.id("workspaces"),
+    staffMemberId: v.id("staffMembers"),
+    token: v.string(),
+    expiresAt: v.number(),
+    createdBy: v.id("users"),
+  })
+    .index("by_token", ["token"])
+    .index("by_workspaceId", ["workspaceId"]),
 });

@@ -28,7 +28,7 @@ const noop = () => {};
 interface KanbanBoardProps {
   tasks: Doc<"tasks">[];
   staffById: Map<string, Doc<"staffMembers">>;
-  onMoveTask: (taskId: Id<"tasks">, newStatus: TaskStatus, newSortOrder: number) => void;
+  onMoveTask?: (taskId: Id<"tasks">, newStatus: TaskStatus, newSortOrder: number) => void;
   onEditTask: (task: Doc<"tasks">) => void;
   onCompleteTask: (taskId: Id<"tasks">) => void;
   onClearCompleted?: () => void;
@@ -80,6 +80,8 @@ export const KanbanBoard = memo(function KanbanBoard({
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     setActiveId(null);
+    if (!onMoveTask) return;
+
     const { active, over } = event;
 
     if (!over) return;
@@ -144,6 +146,7 @@ export const KanbanBoard = memo(function KanbanBoard({
             onEditTask={onEditTask}
             onCompleteTask={onCompleteTask}
             onClearCompleted={status === "done" ? onClearCompleted : undefined}
+            draggable={!!onMoveTask}
           />
         ))}
       </div>

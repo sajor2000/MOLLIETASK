@@ -53,52 +53,44 @@ export function useTaskActions(tasks?: Doc<"tasks">[]) {
   // Error feedback state
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Saving state — prevents modal close during in-flight mutations
-  const [isSaving, setIsSaving] = useState(false);
-
   const handleSave = useCallback(
     async (data: TaskFormData) => {
-      setIsSaving(true);
-      try {
-        if (editingTask) {
-          try {
-            await updateTask({
-              taskId: editingTask._id,
-              title: data.title,
-              workstream: data.workstream,
-              priority: data.priority,
-              status: data.status,
-              dueDate: data.dueDate,
-              dueTime: data.dueTime,
-              recurring: data.recurring,
-              notes: data.notes,
-              assignedStaffId: data.assignedStaffId ?? null,
-            });
-            setEditingTask(null);
-          } catch {
-            setErrorMessage("Failed to update task");
-          }
-        } else {
-          try {
-            const { assignedStaffId, ...rest } = data;
-            const taskId = await addTask({
-              ...rest,
-              ...(assignedStaffId ? { assignedStaffId } : {}),
-            });
-            const doc = await convex.query(api.tasks.getTask, { taskId });
-            if (doc) {
-              setEditingTask(doc);
-              setIsCreating(false);
-            } else {
-              setIsCreating(false);
-            }
-          } catch {
-            setErrorMessage("Failed to add task");
+      if (editingTask) {
+        try {
+          await updateTask({
+            taskId: editingTask._id,
+            title: data.title,
+            workstream: data.workstream,
+            priority: data.priority,
+            status: data.status,
+            dueDate: data.dueDate,
+            dueTime: data.dueTime,
+            recurring: data.recurring,
+            notes: data.notes,
+            assignedStaffId: data.assignedStaffId ?? null,
+          });
+          setEditingTask(null);
+        } catch {
+          setErrorMessage("Failed to update task");
+        }
+      } else {
+        try {
+          const { assignedStaffId, ...rest } = data;
+          const taskId = await addTask({
+            ...rest,
+            ...(assignedStaffId ? { assignedStaffId } : {}),
+          });
+          const doc = await convex.query(api.tasks.getTask, { taskId });
+          if (doc) {
+            setEditingTask(doc);
+            setIsCreating(false);
+          } else {
             setIsCreating(false);
           }
+        } catch {
+          setErrorMessage("Failed to add task");
+          setIsCreating(false);
         }
-      } finally {
-        setIsSaving(false);
       }
     },
     [editingTask, updateTask, addTask, convex],
@@ -172,7 +164,6 @@ export function useTaskActions(tasks?: Doc<"tasks">[]) {
     setEditingTask,
     isCreating,
     setIsCreating,
-    isSaving,
     handleSave,
     handleDelete,
     handleComplete,

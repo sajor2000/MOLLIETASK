@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation, MutationCtx } from "./_generated/server";
-import { getAuthUserId } from "./authHelpers";
+import { getWorkspaceContext, requireOwner, canToggleSubtask } from "./authHelpers";
 import type { Id } from "./_generated/dataModel";
 
 const MAX_SUBTASKS_PER_TASK = 20;
@@ -36,9 +36,15 @@ export const getSubtasks = query({
     }),
   ),
   handler: async (ctx, { parentTaskId }) => {
-    const userId = await getAuthUserId(ctx);
+    const wsCtx = await getWorkspaceContext(ctx);
     const task = await ctx.db.get(parentTaskId);
-    if (!task || task.userId !== userId) return [];
+    if (!task || task.workspaceId !== wsCtx.workspaceId) return [];
+    // Members can only see subtasks of their assigned practice tasks
+    if (
+      wsCtx.role === "member" &&
+      (task.workstream !== "practice" || task.assignedStaffId !== wsCtx.staffMemberId)
+    )
+      return [];
     return await ctx.db
       .query("subtasks")
       .withIndex("by_parentTaskId_and_sortOrder", (q) =>
@@ -52,9 +58,9 @@ export const getSubtaskCounts = query({
   args: { parentTaskId: v.id("tasks") },
   returns: v.object({ total: v.number(), completed: v.number() }),
   handler: async (ctx, { parentTaskId }) => {
-    const userId = await getAuthUserId(ctx);
+    const wsCtx = await getWorkspaceContext(ctx);
     const task = await ctx.db.get(parentTaskId);
-    if (!task || task.userId !== userId) return { total: 0, completed: 0 };
+    if (!task || task.workspaceId !== wsCtx.workspaceId) return { total: 0, completed: 0 };
     const subtasks = await ctx.db
       .query("subtasks")
       .withIndex("by_parentTaskId_and_sortOrder", (q) =>
@@ -77,9 +83,9 @@ export const addSubtask = mutation({
   },
   returns: v.id("subtasks"),
   handler: async (ctx, { parentTaskId, title }) => {
-    const userId = await getAuthUserId(ctx);
+    const wsCtx = await requireOwner(ctx);
     const task = await ctx.db.get(parentTaskId);
-    if (!task || task.userId !== userId) throw new Error("Task not found");
+    if (!task || task.workspaceId !== wsCtx.workspaceId) throw new Error("Task not found");
 
     if (title.length > 200) throw new Error("Subtask title max 200 characters");
 
@@ -99,7 +105,8 @@ export const addSubtask = mutation({
 
     const id = await ctx.db.insert("subtasks", {
       parentTaskId,
-      userId,
+      userId: wsCtx.userId,
+      workspaceId: wsCtx.workspaceId,
       title: title.trim(),
       isComplete: false,
       sortOrder,
@@ -114,9 +121,14 @@ export const toggleSubtask = mutation({
   args: { subtaskId: v.id("subtasks") },
   returns: v.null(),
   handler: async (ctx, { subtaskId }) => {
-    const userId = await getAuthUserId(ctx);
+    const wsCtx = await getWorkspaceContext(ctx);
     const subtask = await ctx.db.get(subtaskId);
-    if (!subtask || subtask.userId !== userId) throw new Error("Subtask not found");
+    if (!subtask || subtask.workspaceId !== wsCtx.workspaceId) throw new Error("Subtask not found");
+    // Permission check via parent task
+    const parentTask = await ctx.db.get(subtask.parentTaskId);
+    if (!parentTask || !canToggleSubtask(wsCtx, parentTask)) {
+      throw new Error("Not authorized to toggle this subtask");
+    }
 
     await ctx.db.patch(subtaskId, { isComplete: !subtask.isComplete });
     await updateParentCounts(ctx, subtask.parentTaskId);
@@ -128,9 +140,9 @@ export const deleteSubtask = mutation({
   args: { subtaskId: v.id("subtasks") },
   returns: v.null(),
   handler: async (ctx, { subtaskId }) => {
-    const userId = await getAuthUserId(ctx);
+    const wsCtx = await requireOwner(ctx);
     const subtask = await ctx.db.get(subtaskId);
-    if (!subtask || subtask.userId !== userId) throw new Error("Subtask not found");
+    if (!subtask || subtask.workspaceId !== wsCtx.workspaceId) throw new Error("Subtask not found");
 
     await ctx.db.delete(subtaskId);
     await updateParentCounts(ctx, subtask.parentTaskId);
@@ -145,9 +157,9 @@ export const reorderSubtask = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { subtaskId, newSortOrder }) => {
-    const userId = await getAuthUserId(ctx);
+    const wsCtx = await requireOwner(ctx);
     const subtask = await ctx.db.get(subtaskId);
-    if (!subtask || subtask.userId !== userId) throw new Error("Subtask not found");
+    if (!subtask || subtask.workspaceId !== wsCtx.workspaceId) throw new Error("Subtask not found");
 
     await ctx.db.patch(subtaskId, { sortOrder: newSortOrder });
     return null;

@@ -1,8 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
-import { getAuthUserId } from "./authHelpers";
-import { enforceRateLimit } from "./rateLimit";
+import { getWorkspaceContext, requireOwner } from "./authHelpers";
 
 /** Max attachments per task (enforced in finalizeUpload). */
 export const MAX_FILES_PER_TASK = 10;
@@ -36,8 +35,7 @@ export const generateUploadUrl = mutation({
   args: {},
   returns: v.string(),
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    await enforceRateLimit(ctx, userId, "generateUploadUrl", 300);
+    await requireOwner(ctx);
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -50,10 +48,10 @@ export const finalizeUpload = mutation({
   },
   returns: v.id("taskAttachments"),
   handler: async (ctx, { taskId, storageId, filename }) => {
-    const userId = await getAuthUserId(ctx);
+    const wsCtx = await requireOwner(ctx);
 
     const task = await ctx.db.get(taskId);
-    if (!task || task.userId !== userId) {
+    if (!task || task.workspaceId !== wsCtx.workspaceId) {
       await ctx.storage.delete(storageId);
       throw new Error("Task not found");
     }
@@ -103,7 +101,8 @@ export const finalizeUpload = mutation({
 
     return await ctx.db.insert("taskAttachments", {
       taskId,
-      userId,
+      userId: wsCtx.userId,
+      workspaceId: wsCtx.workspaceId,
       storageId,
       filename: filename?.trim() || undefined,
       createdAt: Date.now(),
@@ -115,10 +114,10 @@ export const removeAttachment = mutation({
   args: { attachmentId: v.id("taskAttachments") },
   returns: v.null(),
   handler: async (ctx, { attachmentId }) => {
-    const userId = await getAuthUserId(ctx);
+    const wsCtx = await requireOwner(ctx);
 
     const row = await ctx.db.get(attachmentId);
-    if (!row || row.userId !== userId) {
+    if (!row || row.workspaceId !== wsCtx.workspaceId) {
       throw new Error("Attachment not found");
     }
 
@@ -132,10 +131,17 @@ export const listForTask = query({
   args: { taskId: v.id("tasks") },
   returns: v.array(taskAttachmentListItemValidator),
   handler: async (ctx, { taskId }) => {
-    const userId = await getAuthUserId(ctx);
+    const wsCtx = await getWorkspaceContext(ctx);
 
     const task = await ctx.db.get(taskId);
-    if (!task || task.userId !== userId) {
+    if (!task || task.workspaceId !== wsCtx.workspaceId) {
+      return [];
+    }
+    // Members can only view attachments on their assigned practice tasks
+    if (
+      wsCtx.role === "member" &&
+      (task.workstream !== "practice" || task.assignedStaffId !== wsCtx.staffMemberId)
+    ) {
       return [];
     }
 

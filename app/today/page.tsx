@@ -13,8 +13,10 @@ import { Icon } from "@/components/ui/Icon";
 import type { TaskFormData } from "@/lib/constants";
 import { toCSTDateString, fromDateInputValue } from "@/lib/dates";
 import { useTaskActions } from "@/hooks/useTaskActions";
+import { useWorkspace } from "@/hooks/useWorkspace";
 
 export default function TodayPage() {
+  const { isOwner, isMember } = useWorkspace();
   const todoTasks = useQuery(api.tasks.getTasksByStatus, { status: "todo" });
   const inProgressTasks = useQuery(api.tasks.getTasksByStatus, { status: "inprogress" });
   const tasks = useMemo(
@@ -81,12 +83,14 @@ export default function TodayPage() {
               })}
             </p>
           </div>
-          <button
-            onClick={handleAddToday}
-            className="p-2 text-text-muted hover:text-accent transition-colors duration-200"
-          >
-            <Icon name="add" className="w-5 h-5" />
-          </button>
+          {isOwner && (
+            <button
+              onClick={handleAddToday}
+              className="p-2 text-text-muted hover:text-accent transition-colors duration-200"
+            >
+              <Icon name="add" className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {tasks === undefined ? (
@@ -94,12 +98,14 @@ export default function TodayPage() {
         ) : isEmpty ? (
           <div className="text-center py-16">
             <p className="text-[13px] text-text-muted">Nothing due today</p>
-            <button
-              onClick={handleAddToday}
-              className="mt-3 text-[13px] text-accent hover:opacity-80 transition-opacity"
-            >
-              Add a task
-            </button>
+            {isOwner && (
+              <button
+                onClick={handleAddToday}
+                className="mt-3 text-[13px] text-accent hover:opacity-80 transition-opacity"
+              >
+                Add a task
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-6">
@@ -142,9 +148,10 @@ export default function TodayPage() {
           task={editingTask}
           prefill={isCreating ? todayPrefill : undefined}
           staffMembers={staffList ?? []}
-          onSave={handleSave}
-          onDelete={editingTask ? () => handleDelete(editingTask._id) : undefined}
+          onSave={isOwner ? handleSave : undefined}
+          onDelete={isOwner && editingTask ? () => handleDelete(editingTask._id) : undefined}
           onClose={() => { setEditingTask(null); setIsCreating(false); }}
+          readOnly={isMember}
         />
       )}
 

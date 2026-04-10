@@ -7,18 +7,36 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { AppShell } from "@/components/layout/AppShell";
 import { Icon } from "@/components/ui/Icon";
+import { useWorkspace } from "@/hooks/useWorkspace";
 
 export default function TeamPage() {
+  const { isMember, isLoading: wsLoading } = useWorkspace();
+  const router = useRouter();
+
+  // Route guard: members cannot access team page
+  if (!wsLoading && isMember) {
+    router.push("/");
+    return null;
+  }
+
+  return <TeamPageContent />;
+}
+
+function TeamPageContent() {
   const user = useQuery(api.users.getMe);
   const staff = useQuery(
     api.staff.listStaff,
     user !== undefined && user !== null ? {} : "skip",
   );
+  const invites = useQuery(api.workspaces.listInvites);
   const addStaff = useMutation(api.staff.addStaff);
   const updateStaff = useMutation(api.staff.updateStaff);
   const deleteStaff = useMutation(api.staff.deleteStaff);
   const reorderStaff = useMutation(api.staff.reorderStaff);
   const seedPresetTeamIfEmpty = useMutation(api.staff.seedPresetTeamIfEmpty);
+  const generateInvite = useMutation(api.workspaces.generateInvite);
+  const revokeInvite = useMutation(api.workspaces.revokeInvite);
+  const removeMember = useMutation(api.workspaces.removeMember);
   const router = useRouter();
 
   const [name, setName] = useState("");
@@ -31,7 +49,17 @@ export default function TeamPage() {
   const [editRole, setEditRole] = useState("");
   const [editBio, setEditBio] = useState("");
   const [expandedBioId, setExpandedBioId] = useState<Id<"staffMembers"> | null>(null);
+  const [inviteToken, setInviteToken] = useState<{ staffId: Id<"staffMembers">; token: string } | null>(null);
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const inviteByStaffId = useMemo(() => {
+    const map = new Map<string, { _id: Id<"workspaceInvites">; token: string }>();
+    for (const inv of invites ?? []) {
+      map.set(inv.staffMemberId as string, { _id: inv._id, token: inv.token });
+    }
+    return map;
+  }, [invites]);
 
   const orderedIds = useMemo(() => (staff ?? []).map((s) => s._id), [staff]);
 
@@ -113,6 +141,41 @@ export default function TeamPage() {
       }
     },
     [deleteStaff, editingId],
+  );
+
+  const handleGenerateInvite = useCallback(
+    async (staffMemberId: Id<"staffMembers">) => {
+      setError(null);
+      try {
+        const token = await generateInvite({ staffMemberId });
+        setInviteToken({ staffId: staffMemberId, token });
+        setCopied(false);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to generate invite");
+      }
+    },
+    [generateInvite],
+  );
+
+  const handleCopyInvite = useCallback(async () => {
+    if (!inviteToken) return;
+    const url = `${window.location.origin}/invite/${inviteToken.token}`;
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [inviteToken]);
+
+  const handleRevokeInvite = useCallback(
+    async (inviteId: Id<"workspaceInvites">) => {
+      setError(null);
+      try {
+        await revokeInvite({ inviteId });
+        setInviteToken(null);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to revoke invite");
+      }
+    },
+    [revokeInvite],
   );
 
   const move = useCallback(
@@ -301,7 +364,18 @@ export default function TeamPage() {
                         </button>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-medium text-text-primary">{member.name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-[13px] font-medium text-text-primary">{member.name}</p>
+                          {member.linkedUserId ? (
+                            <span className="text-[10px] font-medium text-success bg-success/15 px-1.5 py-0.5 rounded-[3px]">
+                              Active
+                            </span>
+                          ) : inviteByStaffId.has(member._id) ? (
+                            <span className="text-[10px] font-medium text-accent bg-accent/15 px-1.5 py-0.5 rounded-[3px]">
+                              Invite pending
+                            </span>
+                          ) : null}
+                        </div>
                         <p className="text-[12px] text-text-muted">{member.roleTitle}</p>
                         {index < 9 && (
                           <p className="text-[11px] text-text-muted/80 mt-1">Hotkey: {index + 1}</p>
@@ -326,6 +400,24 @@ export default function TeamPage() {
                             )}
                           </div>
                         )}
+                        {/* Invite link display */}
+                        {inviteToken?.staffId === member._id && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <input
+                              type="text"
+                              readOnly
+                              value={`${typeof window !== "undefined" ? window.location.origin : ""}/invite/${inviteToken.token}`}
+                              className="flex-1 bg-bg-base border border-border/15 rounded-[4px] px-2 py-1 text-[11px] text-text-muted"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleCopyInvite}
+                              className="text-[11px] text-accent font-medium shrink-0"
+                            >
+                              {copied ? "Copied!" : "Copy"}
+                            </button>
+                          </div>
+                        )}
                       </div>
                       <div className="flex flex-col gap-1 shrink-0">
                         <button
@@ -342,6 +434,24 @@ export default function TeamPage() {
                         >
                           Edit
                         </button>
+                        {!member.linkedUserId && !inviteByStaffId.has(member._id) && (
+                          <button
+                            type="button"
+                            onClick={() => handleGenerateInvite(member._id)}
+                            className="text-[12px] text-accent hover:underline"
+                          >
+                            Invite
+                          </button>
+                        )}
+                        {inviteByStaffId.has(member._id) && (
+                          <button
+                            type="button"
+                            onClick={() => handleRevokeInvite(inviteByStaffId.get(member._id)!._id)}
+                            className="text-[12px] text-text-muted hover:text-destructive"
+                          >
+                            Revoke
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => handleDelete(member._id)}

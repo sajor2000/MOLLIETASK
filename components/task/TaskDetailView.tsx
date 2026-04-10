@@ -11,9 +11,10 @@ interface TaskDetailViewProps {
   task?: Doc<"tasks"> | null;
   prefill?: Partial<TaskFormData>;
   staffMembers?: Doc<"staffMembers">[];
-  onSave: (data: TaskFormData) => void | Promise<void>;
+  onSave?: (data: TaskFormData) => void | Promise<void>;
   onDelete?: () => void;
   onClose: () => void;
+  readOnly?: boolean;
 }
 
 export function TaskDetailView({
@@ -23,6 +24,7 @@ export function TaskDetailView({
   onSave,
   onDelete,
   onClose,
+  readOnly = false,
 }: TaskDetailViewProps) {
   const [dialogEl, setDialogEl] = useState<HTMLDivElement | null>(null);
   const [saving, setSaving] = useState(false);
@@ -42,9 +44,10 @@ export function TaskDetailView({
 
   const guardedSave = useCallback(
     async (data: TaskFormData) => {
+      if (!onSave) return;
       setSaving(true);
       try {
-        await Promise.resolve(onSave(data));
+        await onSave(data);
       } finally {
         setSaving(false);
       }
@@ -96,7 +99,7 @@ export function TaskDetailView({
           {/* Header */}
           <div className="flex items-center justify-between px-6 pb-2 md:py-4 md:border-b md:border-border">
             <h2 className="text-[15px] font-medium text-text-primary">
-              {task ? "Edit task" : "New task"}
+              {readOnly ? "Task details" : task ? "Edit task" : "New task"}
             </h2>
             <button
               onClick={guardedClose}
@@ -112,11 +115,12 @@ export function TaskDetailView({
             prefill={prefill}
             staffMembers={staffMembers}
             hotkeyRoot={dialogEl}
-            onSave={guardedSave}
-            onDelete={onDelete}
+            onSave={readOnly ? undefined : guardedSave}
+            onDelete={readOnly ? undefined : onDelete}
             onClose={guardedClose}
+            readOnly={readOnly}
           >
-            {task?._id && <SubtaskList parentTaskId={task._id} />}
+            {task?._id && <SubtaskList parentTaskId={task._id} readOnly={readOnly} />}
           </TaskForm>
         </div>
       </div>
