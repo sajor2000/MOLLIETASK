@@ -290,3 +290,18 @@ export const getWorkspaceInfo = query({
     };
   },
 });
+
+// ── Workspace name update ───────────────────────────
+
+export const updateWorkspaceName = mutation({
+  args: { name: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { name }) => {
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error("Workspace name cannot be empty");
+    if (trimmed.length > 100) throw new Error("Workspace name too long");
+    const wsCtx = await requireOwner(ctx);
+    await ctx.db.patch(wsCtx.workspaceId, { name: trimmed });
+    return null;
+  },
+});
