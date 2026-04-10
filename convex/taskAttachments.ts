@@ -69,13 +69,15 @@ export const finalizeUpload = mutation({
       throw new Error(`File too large (max ${MAX_FILE_BYTES} bytes)`);
     }
 
-    // Content-type allowlist — block HTML/SVG/XML to prevent stored XSS
+    // Content-type blocklist — block HTML/SVG/XML/JS to prevent stored XSS
     const BLOCKED_CONTENT_TYPES = new Set([
       "text/html",
       "application/xhtml+xml",
       "image/svg+xml",
       "text/xml",
       "application/xml",
+      "application/javascript",
+      "text/javascript",
     ]);
     if (meta.contentType && BLOCKED_CONTENT_TYPES.has(meta.contentType)) {
       await ctx.storage.delete(storageId);

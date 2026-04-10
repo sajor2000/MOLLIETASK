@@ -4,7 +4,9 @@ import {
   getAuthUserId,
   requireOwner,
   getWorkspaceContext,
+  generateSecureToken,
 } from "./authHelpers";
+import { enforceRateLimit } from "./rateLimit";
 
 // ── Invite generation ───────────────────────────────
 
@@ -22,27 +24,18 @@ export const generateInvite = mutation({
       throw new Error("Staff member already has a linked account");
     }
 
-    // Revoke any existing invite for this staff member
+    // Revoke any existing invite for this staff member using the composite index
     const existing = await ctx.db
       .query("workspaceInvites")
-      .withIndex("by_workspaceId", (q) =>
-        q.eq("workspaceId", wsCtx.workspaceId),
+      .withIndex("by_workspaceId_staffMemberId", (q) =>
+        q.eq("workspaceId", wsCtx.workspaceId).eq("staffMemberId", staffMemberId),
       )
-      .take(100);
+      .take(5);
     for (const inv of existing) {
-      if (inv.staffMemberId === staffMemberId) {
-        await ctx.db.delete(inv._id);
-      }
+      await ctx.db.delete(inv._id);
     }
 
-    // Generate a cryptographically secure token using Web Crypto (available in Convex V8)
-    const bytes = new Uint8Array(24);
-    crypto.getRandomValues(bytes);
-    const token = btoa(String.fromCharCode(...bytes))
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=/g, "")
-      .slice(0, 32);
+    const token = generateSecureToken();
 
     const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
     await ctx.db.insert("workspaceInvites", {
@@ -72,18 +65,21 @@ export const consumeInvite = mutation({
     }
 
     const userId = await getAuthUserId(ctx);
+    await enforceRateLimit(ctx, userId, "consumeInvite", 10_000);
 
     const invite = await ctx.db
       .query("workspaceInvites")
       .withIndex("by_token", (q) => q.eq("token", token))
       .unique();
 
+    // Return the same error for both "not found" and "expired" to prevent
+    // timing-based enumeration of token existence.
     if (!invite) {
       return { success: false, error: "Invalid invite link" };
     }
     if (invite.expiresAt < Date.now()) {
       await ctx.db.delete(invite._id);
-      return { success: false, error: "This invite has expired" };
+      return { success: false, error: "Invalid invite link" };
     }
 
     // Check if user is already a member
@@ -166,7 +162,9 @@ export const listInvites = query({
       .map((inv) => ({
         _id: inv._id,
         staffMemberId: inv.staffMemberId,
-        token: inv.token,
+        // Return only a masked prefix — the full token is only needed at
+        // generation time (returned directly by generateInvite).
+        token: inv.token.slice(0, 6) + "…",
         expiresAt: inv.expiresAt,
       }));
   },
@@ -198,20 +196,23 @@ export const removeMember = mutation({
       await ctx.db.patch(staff._id, { linkedUserId: undefined });
     }
 
-    // Clear the removed user's active workspace (falls back to their own)
+    // Fall back to the evicted user's own owner workspace.
+    // Only patch if a fallback was found — if none exists, storeUser will
+    // provision a new workspace on the user's next login.
     const user = await ctx.db.get(membership.userId);
     if (user && user.activeWorkspaceId === wsCtx.workspaceId) {
-      // Find their own workspace
-      const ownMembership = await ctx.db
+      const ownMemberships = await ctx.db
         .query("workspaceMembers")
         .withIndex("by_userId", (q) => q.eq("userId", membership.userId))
         .take(10);
-      const ownWorkspace = ownMembership.find(
+      const ownWorkspace = ownMemberships.find(
         (m) => m.role === "owner" && m.workspaceId !== wsCtx.workspaceId,
       );
-      await ctx.db.patch(membership.userId, {
-        activeWorkspaceId: ownWorkspace?.workspaceId,
-      });
+      if (ownWorkspace) {
+        await ctx.db.patch(membership.userId, {
+          activeWorkspaceId: ownWorkspace.workspaceId,
+        });
+      }
     }
 
     await ctx.db.delete(memberId);

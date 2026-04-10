@@ -27,7 +27,10 @@ function StoreUser() {
   useEffect(() => {
     if (!isAuthenticated || hasCalled.current) return;
     hasCalled.current = true;
-    storeUser().catch((err) => console.error("Failed to store user:", err));
+    storeUser().catch((err) => {
+      console.error("Failed to store user:", err);
+      hasCalled.current = false; // reset so the next re-render retries
+    });
   }, [isAuthenticated, storeUser]);
 
   return null;

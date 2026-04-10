@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, memo } from "react";
 import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Icon } from "@/components/ui/Icon";
@@ -23,14 +23,16 @@ interface AiCaptureBarProps {
   onAddTask: (prefill: Partial<TaskFormData>) => void;
   onEditTask: (task: Doc<"tasks">, changes: Partial<TaskFormData>) => void;
   onCompleteTask: (taskId: Id<"tasks">) => void;
+  onDeleteTask: (taskId: Id<"tasks">) => void;
 }
 
-export function AiCaptureBar({
+export const AiCaptureBar = memo(function AiCaptureBar({
   tasks,
   staffMembers = [],
   onAddTask,
   onEditTask,
   onCompleteTask,
+  onDeleteTask,
 }: AiCaptureBarProps) {
   const parseIntent = useAction(api.aiActions.parseTaskIntent);
   const [input, setInput] = useState("");
@@ -129,6 +131,21 @@ export function AiCaptureBar({
 
         onCompleteTask(task._id);
         setInput("");
+      } else if (result.intent === "delete") {
+        const task =
+          result.taskIndex !== undefined
+            ? activeTasks[result.taskIndex]
+            : undefined;
+
+        if (!task) {
+          setError("Couldn't find that task.");
+          return;
+        }
+
+        if (window.confirm(`Delete "${task.title}"?`)) {
+          onDeleteTask(task._id);
+          setInput("");
+        }
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Unknown error";
@@ -182,4 +199,4 @@ export function AiCaptureBar({
       )}
     </div>
   );
-}
+});

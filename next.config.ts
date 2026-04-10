@@ -9,9 +9,9 @@ const cspHeader = `
   default-src 'self';
   script-src 'self' 'unsafe-inline' https://*.clerk.accounts.dev https://*.clerk.com;
   style-src 'self' 'unsafe-inline';
-  font-src 'self';
-  worker-src 'self';
-  connect-src 'self' https://*.convex.cloud wss://*.convex.cloud https://*.clerk.accounts.dev https://clerk.shorelinetask.space https://*.clerk.com;
+  font-src 'self' https://fonts.gstatic.com;
+  worker-src 'self' blob:;
+  connect-src 'self' https://*.convex.cloud wss://*.convex.cloud https://*.clerk.accounts.dev https://clerk.shorelinetask.space https://*.clerk.com https://clerk-telemetry.com;
   frame-src 'self' https://*.clerk.accounts.dev https://clerk.shorelinetask.space https://*.clerk.com;
   img-src 'self' blob: data: https://img.clerk.com https://www.gravatar.com;
   object-src 'none';

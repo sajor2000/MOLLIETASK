@@ -8,7 +8,9 @@ export default function SignOutPage() {
 
   useEffect(() => {
     signOut({ redirectUrl: "/sign-in" });
-  }, [signOut]);
+  // signOut is a stable reference from useClerk — empty deps is intentional
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="min-h-dvh flex items-center justify-center bg-background">

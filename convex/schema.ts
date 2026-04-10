@@ -165,6 +165,7 @@ export default defineSchema({
     name: v.string(),
     ownerUserId: v.id("users"),
     createdAt: v.number(),
+    taskCount: v.optional(v.number()),
   })
     .index("by_ownerUserId", ["ownerUserId"]),
 
@@ -186,5 +187,6 @@ export default defineSchema({
     createdBy: v.id("users"),
   })
     .index("by_token", ["token"])
-    .index("by_workspaceId", ["workspaceId"]),
+    .index("by_workspaceId", ["workspaceId"])
+    .index("by_workspaceId_staffMemberId", ["workspaceId", "staffMemberId"]),
 });

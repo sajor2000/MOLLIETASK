@@ -4,26 +4,26 @@ import { useMemo, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { fromDateInputValue, toCSTDateString } from "@/lib/dates";
 import { AppShell } from "@/components/layout/AppShell";
-import { TaskDetailView } from "@/components/task/TaskDetailView";
 import { TaskListItem } from "@/components/task/TaskListItem";
-import { UndoToast } from "@/components/ui/UndoToast";
-import { ErrorToast } from "@/components/ui/ErrorToast";
+import { TaskOverlays } from "@/components/task/TaskOverlays";
 import { Icon } from "@/components/ui/Icon";
 import type { TaskFormData } from "@/lib/constants";
-import { toCSTDateString, fromDateInputValue } from "@/lib/dates";
 import { useTaskActions } from "@/hooks/useTaskActions";
 import { useWorkspace } from "@/hooks/useWorkspace";
 
 export default function TodayPage() {
   const { isOwner, isMember } = useWorkspace();
-  const todoTasks = useQuery(api.tasks.getTasksByStatus, { status: "todo" });
-  const inProgressTasks = useQuery(api.tasks.getTasksByStatus, { status: "inprogress" });
-  const tasks = useMemo(
-    () => (todoTasks && inProgressTasks ? [...todoTasks, ...inProgressTasks] : undefined),
-    [todoTasks, inProgressTasks],
+  // Scoped query: only fetch overdue + today tasks (not future tasks)
+  const [todayEndTs] = useState(() =>
+    fromDateInputValue(toCSTDateString(Date.now())),
   );
-  const staffList = useQuery(api.staff.listStaff);
+  const tasks = useQuery(api.tasks.getTasksForDateRange, {
+    rangeStartTs: 0,
+    rangeEndTs: todayEndTs,
+  });
+  const staffList = useQuery(api.staff.listStaff, isOwner ? {} : "skip");
   const {
     editingTask,
     setEditingTask,
@@ -143,29 +143,22 @@ export default function TodayPage() {
         )}
       </div>
 
-      {(editingTask || isCreating) && (
-        <TaskDetailView
-          task={editingTask}
-          prefill={isCreating ? todayPrefill : undefined}
-          staffMembers={staffList ?? []}
-          onSave={isOwner ? handleSave : undefined}
-          onDelete={isOwner && editingTask ? () => handleDelete(editingTask._id) : undefined}
-          onClose={() => { setEditingTask(null); setIsCreating(false); }}
-          readOnly={isMember}
-        />
-      )}
-
-      {undoAction && (
-        <UndoToast
-          message="Task completed"
-          onUndo={handleUndo}
-          onExpire={clearUndo}
-        />
-      )}
-
-      {errorMessage && !undoAction && (
-        <ErrorToast message={errorMessage} onDismiss={clearError} />
-      )}
+      <TaskOverlays
+        editingTask={editingTask}
+        isCreating={isCreating}
+        prefill={isCreating ? todayPrefill : undefined}
+        staffMembers={staffList ?? []}
+        isOwner={isOwner}
+        isMember={isMember}
+        onSave={handleSave}
+        onDelete={handleDelete}
+        onClose={() => { setEditingTask(null); setIsCreating(false); }}
+        undoAction={undoAction}
+        onUndo={handleUndo}
+        onUndoExpire={clearUndo}
+        errorMessage={errorMessage}
+        onErrorDismiss={clearError}
+      />
     </AppShell>
   );
 }

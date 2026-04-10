@@ -58,7 +58,18 @@ export const checkAndRecord = internalMutation({
       };
     }
 
-    await ctx.db.insert("rateLimits", { userId, action, timestamp: Date.now() });
+    // Upsert — cap table at O(users × actions) rather than growing per call
+    const hit = await ctx.db
+      .query("rateLimits")
+      .withIndex("by_userId_action", (q) =>
+        q.eq("userId", userId).eq("action", action),
+      )
+      .first();
+    if (hit) {
+      await ctx.db.patch(hit._id, { timestamp: Date.now() });
+    } else {
+      await ctx.db.insert("rateLimits", { userId, action, timestamp: Date.now() });
+    }
     return { allowed: true, retryAfterMs: 0 };
   },
 });

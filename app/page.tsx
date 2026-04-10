@@ -5,8 +5,6 @@ import dynamic from "next/dynamic";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { AppShell } from "@/components/layout/AppShell";
-import { UndoToast } from "@/components/ui/UndoToast";
-import { ErrorToast } from "@/components/ui/ErrorToast";
 import type { Doc } from "@/convex/_generated/dataModel";
 import type { TaskFormData } from "@/lib/constants";
 import { useTaskActions } from "@/hooks/useTaskActions";
@@ -16,8 +14,8 @@ const KanbanBoard = dynamic(
   () => import("@/components/kanban/KanbanBoard").then((m) => ({ default: m.KanbanBoard })),
   { ssr: false },
 );
-const TaskDetailView = dynamic(
-  () => import("@/components/task/TaskDetailView").then((m) => ({ default: m.TaskDetailView })),
+const TaskOverlays = dynamic(
+  () => import("@/components/task/TaskOverlays").then((m) => ({ default: m.TaskOverlays })),
   { ssr: false },
 );
 const AiCaptureBar = dynamic(
@@ -109,6 +107,7 @@ export default function KanbanPage() {
             onAddTask={handleAiAddTask}
             onEditTask={handleAiEditTask}
             onCompleteTask={handleComplete}
+            onDeleteTask={handleDelete}
           />
         ) : undefined
       }
@@ -124,33 +123,22 @@ export default function KanbanPage() {
         />
       </div>
 
-      {(editingTask || isCreating) && (
-        <TaskDetailView
-          task={editingTask}
-          prefill={isCreating ? prefillData : undefined}
-          staffMembers={staffList ?? []}
-          onSave={isOwner ? handleSave : undefined}
-          onDelete={
-            isOwner && editingTask
-              ? () => handleDelete(editingTask._id)
-              : undefined
-          }
-          onClose={handleCloseModal}
-          readOnly={isMember}
-        />
-      )}
-
-      {undoAction && (
-        <UndoToast
-          message="Task completed"
-          onUndo={handleUndo}
-          onExpire={clearUndo}
-        />
-      )}
-
-      {errorMessage && !undoAction && (
-        <ErrorToast message={errorMessage} onDismiss={clearError} />
-      )}
+      <TaskOverlays
+        editingTask={editingTask}
+        isCreating={isCreating}
+        prefill={isCreating ? prefillData : undefined}
+        staffMembers={staffList ?? []}
+        isOwner={isOwner}
+        isMember={isMember}
+        onSave={handleSave}
+        onDelete={handleDelete}
+        onClose={handleCloseModal}
+        undoAction={undoAction}
+        onUndo={handleUndo}
+        onUndoExpire={clearUndo}
+        errorMessage={errorMessage}
+        onErrorDismiss={clearError}
+      />
 
       {showTemplates && isOwner && (
         <TemplateLibrary

@@ -47,7 +47,12 @@ export const getTasksByStatus = query({
   args: { status: v.optional(statusValidator) },
   returns: v.array(taskDocValidator),
   handler: async (ctx, { status }) => {
-    const wsCtx = await getWorkspaceContext(ctx);
+    let wsCtx;
+    try {
+      wsCtx = await getWorkspaceContext(ctx);
+    } catch {
+      return [];
+    }
 
     if (wsCtx.role === "owner") {
       if (status) {
@@ -79,6 +84,55 @@ export const getTasksByStatus = query({
       .take(500);
     return tasks.filter(
       (t) => t.workstream === "practice" && (!status || t.status === status),
+    );
+  },
+});
+
+export const getTasksForDateRange = query({
+  args: { rangeStartTs: v.number(), rangeEndTs: v.number() },
+  returns: v.array(taskDocValidator),
+  handler: async (ctx, { rangeStartTs, rangeEndTs }) => {
+    const wsCtx = await getWorkspaceContext(ctx);
+
+    if (wsCtx.role === "owner") {
+      const todoTasks = await ctx.db
+        .query("tasks")
+        .withIndex("by_workspaceId_status_dueDate", (q) =>
+          q
+            .eq("workspaceId", wsCtx.workspaceId)
+            .eq("status", "todo")
+            .gte("dueDate", rangeStartTs)
+            .lte("dueDate", rangeEndTs),
+        )
+        .take(500);
+      const inProgressTasks = await ctx.db
+        .query("tasks")
+        .withIndex("by_workspaceId_status_dueDate", (q) =>
+          q
+            .eq("workspaceId", wsCtx.workspaceId)
+            .eq("status", "inprogress")
+            .gte("dueDate", rangeStartTs)
+            .lte("dueDate", rangeEndTs),
+        )
+        .take(500);
+      return [...todoTasks, ...inProgressTasks];
+    }
+
+    // Member: only assigned practice tasks in range
+    if (!wsCtx.staffMemberId) return [];
+    const staffId = wsCtx.staffMemberId;
+    const tasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_workspaceId_assignedStaffId", (q) =>
+        q.eq("workspaceId", wsCtx.workspaceId).eq("assignedStaffId", staffId),
+      )
+      .take(500);
+    return tasks.filter(
+      (t) =>
+        t.workstream === "practice" &&
+        t.dueDate !== undefined &&
+        t.dueDate >= rangeStartTs &&
+        t.dueDate <= rangeEndTs,
     );
   },
 });
@@ -133,56 +187,74 @@ export async function completeTaskCore(
 
   let nextTaskId: Id<"tasks"> | null = null;
   if (task.recurring && task.dueDate) {
-    // Skip recurring clone if workspace is at task cap
-    const taskCount = (
-      task.workspaceId
-        ? await ctx.db
-            .query("tasks")
-            .withIndex("by_workspaceId_status_sortOrder", (q) =>
-              q.eq("workspaceId", task.workspaceId!),
-            )
-            .take(1001)
-        : await ctx.db
-            .query("tasks")
-            .withIndex("by_userId_status_sortOrder", (q) => q.eq("userId", task.userId))
-            .take(1001)
-    ).length;
-    if (taskCount < 1000) {
-    const nextDueDate = computeNextDueDate(task.dueDate, task.recurring);
-    nextTaskId = await ctx.db.insert("tasks", {
-      userId: task.userId,
-      workspaceId: task.workspaceId,
-      title: task.title,
-      workstream: task.workstream,
-      priority: task.priority,
-      status: "todo",
-      dueDate: nextDueDate,
-      dueTime: task.dueTime,
-      recurring: task.recurring,
-      notes: task.notes,
-      sortOrder: task.sortOrder,
-      createdAt: Date.now(),
-      ...(task.assignedStaffId ? { assignedStaffId: task.assignedStaffId } : {}),
-    });
+    // Skip recurring clone if workspace is at task cap (use denormalized counter)
+    let cloneCount: number;
+    if (task.workspaceId) {
+      const ws = await ctx.db.get(task.workspaceId);
+      if (ws?.taskCount !== undefined) {
+        cloneCount = ws.taskCount;
+      } else {
+        cloneCount = (await ctx.db
+          .query("tasks")
+          .withIndex("by_workspaceId_status_sortOrder", (q) =>
+            q.eq("workspaceId", task.workspaceId!),
+          )
+          .take(1001)
+        ).length;
+        if (ws) await ctx.db.patch(task.workspaceId, { taskCount: cloneCount });
+      }
+    } else {
+      cloneCount = (await ctx.db
+        .query("tasks")
+        .withIndex("by_userId_status_sortOrder", (q) => q.eq("userId", task.userId))
+        .take(1001)
+      ).length;
+    }
 
-    if (subtasks.length > 0) {
-      for (const subtask of subtasks) {
-        await ctx.db.insert("subtasks", {
-          parentTaskId: nextTaskId,
-          userId: task.userId,
-          workspaceId: task.workspaceId,
-          title: subtask.title,
-          isComplete: false,
-          sortOrder: subtask.sortOrder,
-          createdAt: Date.now(),
+    if (cloneCount < 1000) {
+      const nextDueDate = computeNextDueDate(task.dueDate, task.recurring);
+      nextTaskId = await ctx.db.insert("tasks", {
+        userId: task.userId,
+        workspaceId: task.workspaceId,
+        title: task.title,
+        workstream: task.workstream,
+        priority: task.priority,
+        status: "todo",
+        dueDate: nextDueDate,
+        dueTime: task.dueTime,
+        recurring: task.recurring,
+        notes: task.notes,
+        sortOrder: task.sortOrder,
+        createdAt: Date.now(),
+        ...(task.assignedStaffId ? { assignedStaffId: task.assignedStaffId } : {}),
+      });
+
+      if (subtasks.length > 0) {
+        for (const subtask of subtasks) {
+          await ctx.db.insert("subtasks", {
+            parentTaskId: nextTaskId,
+            userId: task.userId,
+            workspaceId: task.workspaceId,
+            title: subtask.title,
+            isComplete: false,
+            sortOrder: subtask.sortOrder,
+            createdAt: Date.now(),
+          });
+        }
+        await ctx.db.patch(nextTaskId, {
+          subtaskTotal: subtasks.length,
+          subtaskCompleted: 0,
         });
       }
-      await ctx.db.patch(nextTaskId, {
-        subtaskTotal: subtasks.length,
-        subtaskCompleted: 0,
-      });
+
+      // Increment counter for the cloned task
+      if (task.workspaceId) {
+        const ws = await ctx.db.get(task.workspaceId);
+        if (ws?.taskCount !== undefined) {
+          await ctx.db.patch(task.workspaceId, { taskCount: ws.taskCount + 1 });
+        }
+      }
     }
-    } // end taskCount < 1000
   }
 
   return { nextTaskId, wasRecurring: !!(task.recurring && task.dueDate) };
@@ -230,21 +302,36 @@ export async function insertTaskCore(
     throw new Error("dueTime must be HH:MM");
 
   // Cap total tasks per workspace to prevent unbounded growth
-  const taskCount = (
-    fields.workspaceId
-      ? await ctx.db
+  let wsTaskCount: number | undefined;
+  if (fields.workspaceId) {
+    const workspace = await ctx.db.get(fields.workspaceId);
+    if (workspace) {
+      if (workspace.taskCount !== undefined) {
+        wsTaskCount = workspace.taskCount;
+      } else {
+        // One-time lazy migration: count and persist
+        wsTaskCount = (await ctx.db
           .query("tasks")
           .withIndex("by_workspaceId_status_sortOrder", (q) =>
             q.eq("workspaceId", fields.workspaceId!),
           )
           .take(1001)
-      : await ctx.db
-          .query("tasks")
-          .withIndex("by_userId_status_sortOrder", (q) => q.eq("userId", userId))
-          .take(1001)
-  ).length;
-  if (taskCount >= 1000) {
-    throw new Error("Task limit reached (1000). Delete some tasks to continue.");
+        ).length;
+        await ctx.db.patch(fields.workspaceId, { taskCount: wsTaskCount });
+      }
+      if (wsTaskCount >= 1000) {
+        throw new Error("Task limit reached (1000). Delete some tasks to continue.");
+      }
+    }
+  } else {
+    const count = (await ctx.db
+      .query("tasks")
+      .withIndex("by_userId_status_sortOrder", (q) => q.eq("userId", userId))
+      .take(1001)
+    ).length;
+    if (count >= 1000) {
+      throw new Error("Task limit reached (1000). Delete some tasks to continue.");
+    }
   }
 
   let assignedStaffId: Id<"staffMembers"> | undefined;
@@ -289,6 +376,12 @@ export async function insertTaskCore(
   });
 
   await ctx.db.patch(userId, { lastUsedWorkstream: fields.workstream });
+
+  // Increment denormalized counter (lazy-migrated above)
+  if (fields.workspaceId && wsTaskCount !== undefined) {
+    await ctx.db.patch(fields.workspaceId, { taskCount: wsTaskCount + 1 });
+  }
+
   return taskId;
 }
 
@@ -325,6 +418,10 @@ export const addTask = mutation({
     });
 
     if (args.reminderAt) {
+      const now = Date.now();
+      if (args.reminderAt <= now) throw new Error("Reminder must be set in the future");
+      if (args.reminderAt > now + 365 * 24 * 60 * 60 * 1000)
+        throw new Error("Reminder must be within 1 year");
       const scheduledId = await ctx.scheduler.runAt(
         args.reminderAt,
         internal.reminders.sendReminder,
@@ -368,6 +465,12 @@ export const updateTask = mutation({
       throw new Error("Notes max 2000 characters");
     if (updates.dueTime !== undefined && !/^\d{2}:\d{2}$/.test(updates.dueTime))
       throw new Error("dueTime must be HH:MM");
+    if (updates.reminderAt !== undefined) {
+      const now = Date.now();
+      if (updates.reminderAt <= now) throw new Error("Reminder must be set in the future");
+      if (updates.reminderAt > now + 365 * 24 * 60 * 60 * 1000)
+        throw new Error("Reminder must be within 1 year");
+    }
 
     if (updates.reminderAt !== undefined && task.scheduledReminderId) {
       await ctx.scheduler.cancel(task.scheduledReminderId);
@@ -473,6 +576,15 @@ export const deleteTask = mutation({
 
     await deleteTaskAttachments(ctx, taskId);
     await ctx.db.delete(taskId);
+
+    // Decrement denormalized counter
+    if (task.workspaceId) {
+      const ws = await ctx.db.get(task.workspaceId);
+      if (ws?.taskCount !== undefined && ws.taskCount > 0) {
+        await ctx.db.patch(task.workspaceId, { taskCount: ws.taskCount - 1 });
+      }
+    }
+
     return null;
   },
 });
@@ -533,6 +645,14 @@ export const uncompleteTask = mutation({
         }
         await deleteTaskAttachments(ctx, spawnedTaskId);
         await ctx.db.delete(spawnedTaskId);
+
+        // Decrement counter for the deleted spawn
+        if (wsCtx.workspaceId) {
+          const ws = await ctx.db.get(wsCtx.workspaceId);
+          if (ws?.taskCount !== undefined && ws.taskCount > 0) {
+            await ctx.db.patch(wsCtx.workspaceId, { taskCount: ws.taskCount - 1 });
+          }
+        }
       }
     }
 
@@ -628,6 +748,16 @@ export const deleteCompletedTasks = mutation({
       await ctx.db.delete(task._id);
     }
 
+    // Decrement counter for deleted tasks
+    if (batch.length > 0) {
+      const ws = await ctx.db.get(wsCtx.workspaceId);
+      if (ws?.taskCount !== undefined) {
+        await ctx.db.patch(wsCtx.workspaceId, {
+          taskCount: Math.max(0, ws.taskCount - batch.length),
+        });
+      }
+    }
+
     // Schedule continuation server-side so client isn't blocked
     if (completed.length > BATCH) {
       await ctx.scheduler.runAfter(0, internal.tasks.deleteCompletedTasksBatch, {
@@ -665,6 +795,16 @@ export const deleteCompletedTasksBatch = internalMutation({
       }
       await deleteTaskAttachments(ctx, task._id);
       await ctx.db.delete(task._id);
+    }
+
+    // Decrement counter for deleted tasks
+    if (batch.length > 0) {
+      const ws = await ctx.db.get(workspaceId);
+      if (ws?.taskCount !== undefined) {
+        await ctx.db.patch(workspaceId, {
+          taskCount: Math.max(0, ws.taskCount - batch.length),
+        });
+      }
     }
 
     if (completed.length > BATCH) {

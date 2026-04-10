@@ -68,6 +68,33 @@ export const getReminderContext = internalQuery({
   },
 });
 
+// ── Single-user lookup for fan-out actions ──────────
+
+export const getUserForNotification = internalQuery({
+  args: { userId: v.id("users") },
+  returns: v.union(
+    v.object({
+      _id: v.id("users"),
+      telegramChatId: v.optional(v.string()),
+      timezone: v.optional(v.string()),
+      digestTime: v.optional(v.string()),
+      lastDigestSentAt: v.optional(v.number()),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, { userId }) => {
+    const user = await ctx.db.get(userId);
+    if (!user) return null;
+    return {
+      _id: user._id,
+      telegramChatId: user.telegramChatId,
+      timezone: user.timezone,
+      digestTime: user.digestTime,
+      lastDigestSentAt: user.lastDigestSentAt,
+    };
+  },
+});
+
 // ── Paginated users query (used by crons) ──────────
 
 const userBatchItemValidator = v.object({
@@ -221,32 +248,43 @@ export const checkOverdue = internalAction({
       cursor: cursor ?? null,
     });
 
-    const now = Date.now();
+    // Fan out: each user's notification runs independently so a slow Telegram
+    // send doesn't block all other users.
     for (const user of batch.users) {
-      const overdue = await ctx.runQuery(internal.reminders.getOverdueTasks, {
+      await ctx.scheduler.runAfter(0, internal.reminders.sendOverdueForUser, {
         userId: user._id,
-        now,
+        now: Date.now(),
       });
-
-      if (overdue.length === 0) continue;
-
-      const message = `You have ${overdue.length} overdue task${overdue.length > 1 ? "s" : ""}`;
-
-      if (user.telegramChatId) {
-        await ctx.runAction(internal.telegram.sendTextMessage, {
-          chatId: user.telegramChatId,
-          text: message,
-        });
-      }
     }
 
-    // Continue with next batch if more users exist
     if (!batch.isDone) {
       await ctx.scheduler.runAfter(0, internal.reminders.checkOverdue, {
         cursor: batch.continueCursor,
       });
     }
 
+    return null;
+  },
+});
+
+export const sendOverdueForUser = internalAction({
+  args: { userId: v.id("users"), now: v.number() },
+  returns: v.null(),
+  handler: async (ctx, { userId, now }) => {
+    const overdue = await ctx.runQuery(internal.reminders.getOverdueTasks, {
+      userId,
+      now,
+    });
+    if (overdue.length === 0) return null;
+
+    const user = await ctx.runQuery(internal.reminders.getUserForNotification, { userId });
+    if (!user?.telegramChatId) return null;
+
+    const message = `You have ${overdue.length} overdue task${overdue.length > 1 ? "s" : ""}`;
+    await ctx.runAction(internal.telegram.sendTextMessage, {
+      chatId: user.telegramChatId,
+      text: message,
+    });
     return null;
   },
 });
@@ -259,77 +297,77 @@ export const checkDigest = internalAction({
       cursor: cursor ?? null,
     });
 
+    // Fan out: each user's digest is independent so slow sends don't block others.
     for (const user of batch.users) {
       if (!user.digestTime) continue;
-
-      // Dedup: skip if sent within last 20 hours
-      if (user.lastDigestSentAt && Date.now() - user.lastDigestSentAt < 20 * 60 * 60 * 1000) {
-        continue;
-      }
-
-      // Compare in user's timezone using Intl.DateTimeFormat.formatToParts
-      const tz = user.timezone ?? DEFAULT_TIMEZONE;
-      const now = new Date();
-      const fmt = new Intl.DateTimeFormat("en-US", {
-        timeZone: tz,
-        hour: "numeric",
-        minute: "numeric",
-        year: "numeric",
-        month: "numeric",
-        day: "numeric",
-        hour12: false,
-      });
-      const parts = fmt.formatToParts(now);
-      const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value ?? "0");
-      const nowHour = get("hour");
-      const nowMinute = get("minute");
-
-      const [h, m] = user.digestTime.split(":").map(Number);
-      const digestMinutes = h * 60 + m;
-      const nowMinutes = nowHour * 60 + nowMinute;
-
-      if (Math.abs(nowMinutes - digestMinutes) > 15) continue;
-
-      // Compute today's start/end as UTC timestamps corresponding to midnight in user's tz.
-      const nowSecond = now.getUTCSeconds();
-      const elapsedMs = (nowHour * 3600 + nowMinute * 60 + nowSecond) * 1000 + now.getMilliseconds();
-      const todayStart = new Date(now.getTime() - elapsedMs);
-      const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
-
-      const counts = await ctx.runQuery(internal.reminders.getDigestCounts, {
+      await ctx.scheduler.runAfter(0, internal.reminders.sendDigestForUser, {
         userId: user._id,
-        todayStart: todayStart.getTime(),
-        todayEnd: todayEnd.getTime(),
-      });
-
-      if (counts.length === 0) continue;
-
-      const lines = counts.map(
-        (c: { workstream: Workstream; total: number; high: number }) =>
-          `${c.workstream.charAt(0).toUpperCase() + c.workstream.slice(1)}: ${c.total} task${c.total > 1 ? "s" : ""}${c.high > 0 ? ` (${c.high} high priority)` : ""}`,
-      );
-
-      const message = `Good morning! Here's your day:\n${lines.join("\n")}`;
-
-      if (user.telegramChatId) {
-        await ctx.runAction(internal.telegram.sendTextMessage, {
-          chatId: user.telegramChatId,
-          text: message,
-        });
-      }
-
-      await ctx.runMutation(internal.reminders.markDigestSent, {
-        userId: user._id,
+        now: Date.now(),
       });
     }
 
-    // Continue with next batch if more users exist
     if (!batch.isDone) {
       await ctx.scheduler.runAfter(0, internal.reminders.checkDigest, {
         cursor: batch.continueCursor,
       });
     }
 
+    return null;
+  },
+});
+
+export const sendDigestForUser = internalAction({
+  args: { userId: v.id("users"), now: v.number() },
+  returns: v.null(),
+  handler: async (ctx, { userId, now }) => {
+    const user = await ctx.runQuery(internal.reminders.getUserForNotification, { userId });
+    if (!user?.digestTime || !user.telegramChatId) return null;
+
+    // Dedup: skip if sent within last 20 hours
+    if (user.lastDigestSentAt && now - user.lastDigestSentAt < 20 * 60 * 60 * 1000) {
+      return null;
+    }
+
+    const tz = user.timezone ?? DEFAULT_TIMEZONE;
+    const nowDate = new Date(now);
+    const fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      hour: "numeric",
+      minute: "numeric",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour12: false,
+    });
+    const parts = fmt.formatToParts(nowDate);
+    const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value ?? "0");
+    const nowHour = get("hour");
+    const nowMinute = get("minute");
+
+    const [h, m] = user.digestTime.split(":").map(Number);
+    if (Math.abs(nowHour * 60 + nowMinute - (h * 60 + m)) > 15) return null;
+
+    const nowSecond = nowDate.getUTCSeconds();
+    const elapsedMs = (nowHour * 3600 + nowMinute * 60 + nowSecond) * 1000 + nowDate.getMilliseconds();
+    const todayStart = new Date(now - elapsedMs);
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
+
+    const counts = await ctx.runQuery(internal.reminders.getDigestCounts, {
+      userId,
+      todayStart: todayStart.getTime(),
+      todayEnd: todayEnd.getTime(),
+    });
+    if (counts.length === 0) return null;
+
+    const lines = counts.map(
+      (c: { workstream: Workstream; total: number; high: number }) =>
+        `${c.workstream.charAt(0).toUpperCase() + c.workstream.slice(1)}: ${c.total} task${c.total > 1 ? "s" : ""}${c.high > 0 ? ` (${c.high} high priority)` : ""}`,
+    );
+    await ctx.runAction(internal.telegram.sendTextMessage, {
+      chatId: user.telegramChatId,
+      text: `Good morning! Here's your day:\n${lines.join("\n")}`,
+    });
+    await ctx.runMutation(internal.reminders.markDigestSent, { userId });
     return null;
   },
 });

@@ -16,7 +16,14 @@ export async function GET(
   // This avoids XSS-exploitable persistent storage — the token lives only in
   // the URL during the redirect and is removed from the address bar by
   // ConsumeInviteToken after successful consumption.
-  const { userId } = await auth();
+  let userId: string | null = null;
+  try {
+    const session = await auth();
+    userId = session.userId;
+  } catch {
+    // Clerk temporarily unavailable — fall through to sign-up redirect as safe default
+  }
+
   if (userId) {
     // Already authenticated — land on the app and let ConsumeInviteToken handle it
     redirect(`/?token=${token}`);

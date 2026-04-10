@@ -2,6 +2,21 @@ import { QueryCtx, MutationCtx, ActionCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Id, Doc } from "./_generated/dataModel";
 
+// ── Crypto helpers ───────────────────────────────────
+
+/**
+ * Generates a cryptographically secure 32-char base64url token.
+ * 24 random bytes → 32 base64url chars with no padding.
+ */
+export function generateSecureToken(): string {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");
+}
+
 // ── Workspace context types ──────────────────────────
 
 export type WorkspaceRole = "owner" | "member";

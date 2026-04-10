@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalQuery, internalMutation } from "./_generated/server";
 import {
   workstreamValidator,
   priorityValidator,
@@ -24,6 +24,100 @@ const templateDocValidator = v.object({
   subtasks: v.optional(v.array(v.string())),
   sortOrder: v.number(),
   createdAt: v.number(),
+});
+
+// ── Internal query for Telegram bot ─────────────────
+
+export const getTemplatesForTelegram = internalQuery({
+  args: { userId: v.id("users") },
+  returns: v.array(
+    v.object({
+      _id: v.id("taskTemplates"),
+      category: v.string(),
+      title: v.string(),
+      workstream: v.union(
+        v.literal("practice"),
+        v.literal("personal"),
+        v.literal("family"),
+      ),
+      priority: v.union(v.literal("high"), v.literal("normal")),
+      recurring: v.optional(
+        v.union(
+          v.literal("daily"),
+          v.literal("weekdays"),
+          v.literal("weekly"),
+          v.literal("monthly"),
+        ),
+      ),
+      notes: v.optional(v.string()),
+      subtasks: v.optional(v.array(v.string())),
+    }),
+  ),
+  handler: async (ctx, { userId }) => {
+    const user = await ctx.db.get(userId);
+    if (!user?.activeWorkspaceId) return [];
+    const templates = await ctx.db
+      .query("taskTemplates")
+      .withIndex("by_workspaceId_category_sortOrder", (q) =>
+        q.eq("workspaceId", user.activeWorkspaceId!),
+      )
+      .take(200);
+    return templates.map((t) => ({
+      _id: t._id,
+      category: t.category,
+      title: t.title,
+      workstream: t.workstream,
+      priority: t.priority,
+      recurring: t.recurring,
+      notes: t.notes,
+      subtasks: t.subtasks,
+    }));
+  },
+});
+
+export const createFromTemplateForTelegram = internalMutation({
+  args: { templateId: v.id("taskTemplates"), userId: v.id("users") },
+  returns: v.union(
+    v.object({ success: v.literal(true), title: v.string(), workstream: v.union(v.literal("practice"), v.literal("personal"), v.literal("family")) }),
+    v.object({ success: v.literal(false) }),
+  ),
+  handler: async (ctx, { templateId, userId }) => {
+    const tmpl = await ctx.db.get(templateId);
+    if (!tmpl) return { success: false as const };
+
+    const user = await ctx.db.get(userId);
+    if (!user || tmpl.workspaceId !== user.activeWorkspaceId) return { success: false as const };
+
+    const taskId = await insertTaskCore(ctx, userId, {
+      title: tmpl.title,
+      workstream: tmpl.workstream,
+      priority: tmpl.priority,
+      status: "todo",
+      recurring: tmpl.recurring,
+      notes: tmpl.notes,
+      workspaceId: tmpl.workspaceId,
+    });
+
+    if (tmpl.subtasks && tmpl.subtasks.length > 0) {
+      const capped = tmpl.subtasks.slice(0, 20);
+      let nextOrder = 1000;
+      for (const title of capped) {
+        await ctx.db.insert("subtasks", {
+          parentTaskId: taskId,
+          userId,
+          workspaceId: tmpl.workspaceId,
+          title: title.trim().slice(0, 200),
+          isComplete: false,
+          sortOrder: nextOrder,
+          createdAt: Date.now(),
+        });
+        nextOrder += 1000;
+      }
+      await ctx.db.patch(taskId, { subtaskTotal: capped.length, subtaskCompleted: 0 });
+    }
+
+    return { success: true as const, title: tmpl.title, workstream: tmpl.workstream };
+  },
 });
 
 export const listTemplates = query({

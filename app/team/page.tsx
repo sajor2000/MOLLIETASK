@@ -17,7 +17,18 @@ export default function TeamPage() {
     if (!wsLoading && isMember) router.push("/");
   }, [wsLoading, isMember, router]);
 
-  if (!wsLoading && isMember) return null;
+  // Show spinner while role is loading to prevent owner UI flash for members
+  if (wsLoading) {
+    return (
+      <AppShell>
+        <div className="flex items-center justify-center h-[calc(100dvh-64px)]">
+          <p className="text-[13px] text-text-muted">Loading…</p>
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (isMember) return null;
 
   return <TeamPageContent />;
 }
@@ -36,9 +47,6 @@ function TeamPageContent() {
   const seedPresetTeamIfEmpty = useMutation(api.staff.seedPresetTeamIfEmpty);
   const generateInvite = useMutation(api.workspaces.generateInvite);
   const revokeInvite = useMutation(api.workspaces.revokeInvite);
-  const removeMember = useMutation(api.workspaces.removeMember);
-  const router = useRouter();
-
   const [name, setName] = useState("");
   const [roleTitle, setRoleTitle] = useState("");
   const [bio, setBio] = useState("");

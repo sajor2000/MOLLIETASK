@@ -5,10 +5,8 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { AppShell } from "@/components/layout/AppShell";
-import { TaskDetailView } from "@/components/task/TaskDetailView";
 import { TaskListItem } from "@/components/task/TaskListItem";
-import { UndoToast } from "@/components/ui/UndoToast";
-import { ErrorToast } from "@/components/ui/ErrorToast";
+import { TaskOverlays } from "@/components/task/TaskOverlays";
 import { Icon } from "@/components/ui/Icon";
 import { WORKSTREAM_CONFIG } from "@/lib/constants";
 import type { TaskFormData } from "@/lib/constants";
@@ -24,12 +22,26 @@ const MONTHS = [
 
 export default function CalendarPage() {
   const { isOwner, isMember } = useWorkspace();
-  const todoTasks = useQuery(api.tasks.getTasksByStatus, { status: "todo" });
-  const inProgressTasks = useQuery(api.tasks.getTasksByStatus, { status: "inprogress" });
-  const tasks = useMemo(
-    () => (todoTasks && inProgressTasks ? [...todoTasks, ...inProgressTasks] : undefined),
-    [todoTasks, inProgressTasks],
-  );
+
+  const [viewDate, setViewDate] = useState(() => new Date());
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [todayStr] = useState(() => toCSTDateString(Date.now()));
+
+  // Compute date range for the visible month (up to 6 days overflow on each side)
+  const { rangeStart, rangeEnd } = useMemo(() => {
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth();
+    return {
+      rangeStart: new Date(year, month, -6).getTime(),
+      rangeEnd: new Date(year, month + 1, 7).getTime(),
+    };
+  }, [viewDate]);
+
+  // Scoped query: only fetch tasks within the visible month range
+  const tasks = useQuery(api.tasks.getTasksForDateRange, {
+    rangeStartTs: rangeStart,
+    rangeEndTs: rangeEnd,
+  });
   const staffList = useQuery(api.staff.listStaff, isOwner ? {} : "skip");
   const {
     editingTask,
@@ -46,30 +58,18 @@ export default function CalendarPage() {
     clearError,
   } = useTaskActions(tasks);
 
-  const [viewDate, setViewDate] = useState(() => new Date());
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-
-  const [todayStr] = useState(() => toCSTDateString(Date.now()));
-
-  // Group non-done tasks by CST date string, scoped to the visible month range
+  // Group tasks by CST date string (server already filtered to the visible range)
   const tasksByDate = useMemo(() => {
-    const year = viewDate.getFullYear();
-    const month = viewDate.getMonth();
-    // Visible range: up to 6 days before month start and 6 after month end
-    const rangeStart = new Date(year, month, -6).getTime();
-    const rangeEnd = new Date(year, month + 1, 7).getTime();
-
     const map = new Map<string, Doc<"tasks">[]>();
     for (const t of tasks ?? []) {
       if (!t.dueDate) continue;
-      if (t.dueDate < rangeStart || t.dueDate > rangeEnd) continue;
       const dateStr = toCSTDateString(t.dueDate);
       const list = map.get(dateStr) ?? [];
       list.push(t);
       map.set(dateStr, list);
     }
     return map;
-  }, [tasks, viewDate]);
+  }, [tasks]);
 
   // Calendar grid for current month
   const calendarDays = useMemo(() => {
@@ -253,29 +253,22 @@ export default function CalendarPage() {
         )}
       </div>
 
-      {(editingTask || isCreating) && (
-        <TaskDetailView
-          task={editingTask}
-          prefill={createPrefill}
-          staffMembers={staffList ?? []}
-          onSave={isOwner ? handleSave : undefined}
-          onDelete={isOwner && editingTask ? () => handleDelete(editingTask._id) : undefined}
-          onClose={() => { setEditingTask(null); setIsCreating(false); }}
-          readOnly={isMember}
-        />
-      )}
-
-      {undoAction && (
-        <UndoToast
-          message="Task completed"
-          onUndo={handleUndo}
-          onExpire={clearUndo}
-        />
-      )}
-
-      {errorMessage && !undoAction && (
-        <ErrorToast message={errorMessage} onDismiss={clearError} />
-      )}
+      <TaskOverlays
+        editingTask={editingTask}
+        isCreating={isCreating}
+        prefill={createPrefill}
+        staffMembers={staffList ?? []}
+        isOwner={isOwner}
+        isMember={isMember}
+        onSave={handleSave}
+        onDelete={handleDelete}
+        onClose={() => { setEditingTask(null); setIsCreating(false); }}
+        undoAction={undoAction}
+        onUndo={handleUndo}
+        onUndoExpire={clearUndo}
+        errorMessage={errorMessage}
+        onErrorDismiss={clearError}
+      />
     </AppShell>
   );
 }

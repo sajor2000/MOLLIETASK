@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { workstreamValidator, workspaceRoleValidator } from "./schema";
-import { getAuthUserId, storeUser } from "./authHelpers";
+import { getAuthUserId, requireOwner, storeUser, generateSecureToken } from "./authHelpers";
 import { deleteTaskAttachments } from "./tasks";
 import { validateTimezone, validateDigestTime } from "./validation";
 import { enforceRateLimit } from "./rateLimit";
@@ -78,6 +78,11 @@ export const updateSettings = mutation({
   handler: async (ctx, updates) => {
     const userId = await getAuthUserId(ctx);
 
+    // digestTime controls workspace digest scheduling — owner-only
+    if (updates.digestTime !== undefined) {
+      await requireOwner(ctx);
+    }
+
     if (updates.timezone !== undefined) validateTimezone(updates.timezone);
     if (updates.digestTime !== undefined) validateDigestTime(updates.digestTime);
 
@@ -90,21 +95,14 @@ export const generateTelegramLinkToken = mutation({
   args: {},
   returns: v.string(),
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    await enforceRateLimit(ctx, userId, "generateTelegramLinkToken", 30_000);
+    const wsCtx = await requireOwner(ctx); // Telegram integration is owner-only
+    await enforceRateLimit(ctx, wsCtx.userId, "generateTelegramLinkToken", 30_000);
 
-    // Generate a cryptographically secure token using Web Crypto (available in Convex V8)
-    const bytes = new Uint8Array(24);
-    crypto.getRandomValues(bytes);
-    const token = btoa(String.fromCharCode(...bytes))
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=/g, "")
-      .slice(0, 32);
+    const token = generateSecureToken();
 
     const expiry = Date.now() + 10 * 60 * 1000; // 10 minutes
 
-    await ctx.db.patch(userId, {
+    await ctx.db.patch(wsCtx.userId, {
       telegramLinkToken: token,
       telegramLinkExpiry: expiry,
     });
@@ -159,99 +157,16 @@ export const deleteAccount = mutation({
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
     await enforceRateLimit(ctx, userId, "deleteAccount", 60_000);
-
-    // Delete tasks in batches to stay within transaction limits
-    const tasks = await ctx.db
-      .query("tasks")
-      .withIndex("by_userId_status_sortOrder", (q) => q.eq("userId", userId))
-      .take(200);
-
-    for (const task of tasks) {
-      if (task.scheduledReminderId) {
-        await ctx.scheduler.cancel(task.scheduledReminderId);
-      }
-      // Cascade-delete subtasks
-      const subtasks = await ctx.db
-        .query("subtasks")
-        .withIndex("by_parentTaskId_and_sortOrder", (q) =>
-          q.eq("parentTaskId", task._id),
-        )
-        .take(50);
-      for (const subtask of subtasks) {
-        await ctx.db.delete(subtask._id);
-      }
-      await deleteTaskAttachments(ctx, task._id);
-      await ctx.db.delete(task._id);
-    }
-
-    // If more tasks remain, schedule continuation
-    if (tasks.length === 200) {
-      await ctx.scheduler.runAfter(0, internal.users.deleteAccountCleanup, { userId });
-      return null;
-    }
-
-    // Delete push subscriptions
-    const subs = await ctx.db
-      .query("pushSubscriptions")
-      .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .take(200);
-    for (const sub of subs) {
-      await ctx.db.delete(sub._id);
-    }
-
-    // Delete rate limit entries
-    const limits = await ctx.db
-      .query("rateLimits")
-      .withIndex("by_userId_action", (q) => q.eq("userId", userId))
-      .take(200);
-    for (const entry of limits) {
-      await ctx.db.delete(entry._id);
-    }
-
-    // Delete workspace records (owner cascade)
-    const memberships = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .take(50);
-    for (const m of memberships) {
-      if (m.role === "owner") {
-        // Delete all members, invites, and the workspace itself
-        const wsMembers = await ctx.db
-          .query("workspaceMembers")
-          .withIndex("by_workspaceId", (q) => q.eq("workspaceId", m.workspaceId))
-          .take(100);
-        for (const wm of wsMembers) {
-          await ctx.db.delete(wm._id);
-        }
-        const wsInvites = await ctx.db
-          .query("workspaceInvites")
-          .withIndex("by_workspaceId", (q) => q.eq("workspaceId", m.workspaceId))
-          .take(100);
-        for (const inv of wsInvites) {
-          await ctx.db.delete(inv._id);
-        }
-        await ctx.db.delete(m.workspaceId);
-      } else {
-        // Member: just remove membership and unlink staff
-        await ctx.db.delete(m._id);
-      }
-    }
-
-    // Clear linkedUserId on any staff pointing to this user (if member in another workspace)
-    const linkedStaff = await ctx.db
-      .query("staffMembers")
-      .withIndex("by_linkedUserId", (q) => q.eq("linkedUserId", userId))
-      .take(50);
-    for (const s of linkedStaff) {
-      await ctx.db.patch(s._id, { linkedUserId: undefined });
-    }
-
-    await ctx.db.delete(userId);
+    // Delegate all deletion work to the internal continuation, which
+    // self-schedules in batches. This eliminates the duplicate cleanup
+    // logic that previously existed in both this mutation and deleteAccountCleanup.
+    await ctx.scheduler.runAfter(0, internal.users.deleteAccountCleanup, { userId });
     return null;
   },
 });
 
-// Internal continuation for large account deletion
+// Handles all account deletion work in batches. Self-schedules for continuation
+// when the task count exceeds 200. Single source of truth for deletion cascade.
 export const deleteAccountCleanup = internalMutation({
   args: { userId: v.id("users") },
   returns: v.null(),
@@ -265,7 +180,6 @@ export const deleteAccountCleanup = internalMutation({
       if (task.scheduledReminderId) {
         await ctx.scheduler.cancel(task.scheduledReminderId);
       }
-      // Cascade-delete subtasks
       const subtasks = await ctx.db
         .query("subtasks")
         .withIndex("by_parentTaskId_and_sortOrder", (q) =>
@@ -284,6 +198,7 @@ export const deleteAccountCleanup = internalMutation({
       return null;
     }
 
+    // All tasks deleted — clean up remaining records
     const subs = await ctx.db
       .query("pushSubscriptions")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
@@ -292,7 +207,6 @@ export const deleteAccountCleanup = internalMutation({
       await ctx.db.delete(sub._id);
     }
 
-    // Delete rate limit entries
     const limits = await ctx.db
       .query("rateLimits")
       .withIndex("by_userId_action", (q) => q.eq("userId", userId))
@@ -301,7 +215,6 @@ export const deleteAccountCleanup = internalMutation({
       await ctx.db.delete(entry._id);
     }
 
-    // Delete workspace records (same cascade as deleteAccount)
     const memberships = await ctx.db
       .query("workspaceMembers")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
