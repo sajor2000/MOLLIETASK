@@ -62,21 +62,56 @@ export const getTasksForTelegram = internalQuery({
     const user = await ctx.db.get(userId);
     const workspaceId = user?.activeWorkspaceId;
 
-    // Use workspace-scoped index when the user has an active workspace,
-    // otherwise fall back to the legacy userId-scoped index.
-    const tasks = workspaceId
-      ? await ctx.db
-          .query("tasks")
-          .withIndex("by_workspaceId_status_sortOrder", (q) =>
-            q.eq("workspaceId", workspaceId).eq("status", status),
-          )
-          .take(50)
-      : await ctx.db
-          .query("tasks")
-          .withIndex("by_userId_status_sortOrder", (q) =>
-            q.eq("userId", userId).eq("status", status),
-          )
-          .take(50);
+    if (!workspaceId) {
+      const tasks = await ctx.db
+        .query("tasks")
+        .withIndex("by_userId_status_sortOrder", (q) =>
+          q.eq("userId", userId).eq("status", status),
+        )
+        .take(50);
+      return tasks.map((t) => ({
+        _id: t._id,
+        title: t.title,
+        workstream: t.workstream,
+        priority: t.priority,
+        status: t.status,
+        dueDate: t.dueDate,
+        dueTime: t.dueTime,
+      }));
+    }
+
+    // Enforce workspace RBAC: members only see their assigned practice tasks
+    const membership = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspaceId_userId", (q) =>
+        q.eq("workspaceId", workspaceId).eq("userId", userId),
+      )
+      .unique();
+
+    let tasks;
+    if (!membership || membership.role === "owner") {
+      tasks = await ctx.db
+        .query("tasks")
+        .withIndex("by_workspaceId_status_sortOrder", (q) =>
+          q.eq("workspaceId", workspaceId).eq("status", status),
+        )
+        .take(50);
+    } else {
+      const staffMember = await ctx.db
+        .query("staffMembers")
+        .withIndex("by_linkedUserId", (q) => q.eq("linkedUserId", userId))
+        .unique();
+      if (!staffMember) return [];
+      const allAssigned = await ctx.db
+        .query("tasks")
+        .withIndex("by_workspaceId_assignedStaffId", (q) =>
+          q.eq("workspaceId", workspaceId).eq("assignedStaffId", staffMember._id),
+        )
+        .take(50);
+      tasks = allAssigned.filter(
+        (t) => t.workstream === "practice" && t.status === status,
+      );
+    }
 
     return tasks.map((t) => ({
       _id: t._id,

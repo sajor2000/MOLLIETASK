@@ -249,6 +249,106 @@ export const parseTaskIntent = action({
   },
 });
 
+// ── Public atomic capture action ─────────────────────
+
+export const captureTask = action({
+  args: {
+    input: v.string(),
+    todayDate: v.string(),
+    taskContext: v.optional(taskContextValidator),
+    taskIds: v.optional(v.array(v.id("tasks"))),
+    staffContext: staffContextValidator,
+  },
+  returns: v.union(
+    v.object({ type: v.literal("add"), taskId: v.id("tasks") }),
+    v.object({ type: v.literal("edit"), taskId: v.id("tasks") }),
+    v.object({ type: v.literal("complete"), taskId: v.id("tasks") }),
+    v.object({ type: v.literal("delete") }),
+  ),
+  handler: async (ctx, args): Promise<
+    | { type: "add"; taskId: Id<"tasks"> }
+    | { type: "edit"; taskId: Id<"tasks"> }
+    | { type: "complete"; taskId: Id<"tasks"> }
+    | { type: "delete" }
+  > => {
+    const userId = await getActionUserId(ctx);
+
+    if (args.input.length > 500) throw new Error("Input too long");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(args.todayDate))
+      throw new Error("Invalid date format");
+
+    const rateCheck = await ctx.runMutation(internal.rateLimit.checkAndRecord, {
+      userId,
+      action: "parseTaskIntent",
+    });
+    if (!rateCheck.allowed) {
+      throw new Error(`Rate limited. Try again in ${Math.ceil(rateCheck.retryAfterMs / 1000)}s`);
+    }
+
+    const result = await _parseTaskIntentCore({
+      input: args.input,
+      taskContext: args.taskContext ?? [],
+      staffContext: args.staffContext,
+      todayDate: args.todayDate,
+    });
+
+    if (result.intent === "add" && result.fields) {
+      const workstream = result.fields.workstream ?? "personal";
+      const priority = result.fields.priority ?? "normal";
+      const title = (result.fields.title ?? args.input).slice(0, 200);
+      const taskId: Id<"tasks"> = await ctx.runMutation(api.tasks.addTask, {
+        title,
+        workstream,
+        priority,
+        status: "todo",
+        ...(result.fields.dueDate ? { dueDate: new Date(result.fields.dueDate).getTime() } : {}),
+        ...(result.fields.dueTime ? { dueTime: result.fields.dueTime } : {}),
+        ...(result.fields.notes ? { notes: result.fields.notes } : {}),
+        ...(result.fields.recurring ? { recurring: result.fields.recurring } : {}),
+      });
+      return { type: "add" as const, taskId };
+    }
+
+    if (result.taskIndex !== undefined) {
+      const taskId = args.taskIds?.[result.taskIndex];
+      if (!taskId) throw new Error("taskIds required for edit/complete/delete intent");
+
+      if (result.intent === "complete") {
+        await ctx.runMutation(api.tasks.completeTask, { taskId });
+        return { type: "complete" as const, taskId };
+      }
+
+      if (result.intent === "delete") {
+        await ctx.runMutation(api.tasks.deleteTask, { taskId });
+        return { type: "delete" as const };
+      }
+
+      if (result.intent === "edit" && result.fields) {
+        await ctx.runMutation(api.tasks.updateTask, {
+          taskId,
+          ...(result.fields.title ? { title: result.fields.title } : {}),
+          ...(result.fields.dueDate ? { dueDate: new Date(result.fields.dueDate).getTime() } : {}),
+          ...(result.fields.dueTime ? { dueTime: result.fields.dueTime } : {}),
+          ...(result.fields.workstream ? { workstream: result.fields.workstream } : {}),
+          ...(result.fields.priority ? { priority: result.fields.priority } : {}),
+          ...(result.fields.notes ? { notes: result.fields.notes } : {}),
+          ...(result.fields.recurring ? { recurring: result.fields.recurring } : {}),
+        });
+        return { type: "edit" as const, taskId };
+      }
+    }
+
+    // Fallback: treat as plain add
+    const taskId: Id<"tasks"> = await ctx.runMutation(api.tasks.addTask, {
+      title: args.input.slice(0, 200),
+      workstream: "personal",
+      priority: "normal",
+      status: "todo",
+    });
+    return { type: "add" as const, taskId };
+  },
+});
+
 // ── Internal action (Telegram) ─────
 
 export const parseTaskIntentInternal = internalAction({

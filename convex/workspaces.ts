@@ -7,6 +7,7 @@ import {
   generateSecureToken,
 } from "./authHelpers";
 import { enforceRateLimit } from "./rateLimit";
+import { workspaceRoleValidator } from "./schema";
 
 // ── Invite generation ───────────────────────────────
 
@@ -217,6 +218,42 @@ export const removeMember = mutation({
 
     await ctx.db.delete(memberId);
     return null;
+  },
+});
+
+// ── Member listing ──────────────────────────────────
+
+export const listMembers = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      _id: v.id("workspaceMembers"),
+      userId: v.id("users"),
+      role: workspaceRoleValidator,
+      joinedAt: v.number(),
+      name: v.optional(v.string()),
+      email: v.optional(v.string()),
+    }),
+  ),
+  handler: async (ctx) => {
+    const wsCtx = await requireOwner(ctx);
+    const members = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", wsCtx.workspaceId))
+      .take(100);
+    return await Promise.all(
+      members.map(async (m) => {
+        const user = await ctx.db.get(m.userId);
+        return {
+          _id: m._id,
+          userId: m.userId,
+          role: m.role,
+          joinedAt: m.joinedAt,
+          name: user?.name,
+          email: user?.email,
+        };
+      }),
+    );
   },
 });
 

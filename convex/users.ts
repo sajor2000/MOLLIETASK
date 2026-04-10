@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { workstreamValidator, workspaceRoleValidator } from "./schema";
-import { getAuthUserId, requireOwner, storeUser, generateSecureToken } from "./authHelpers";
+import { getAuthUserId, requireOwner, getWorkspaceContext, storeUser, generateSecureToken } from "./authHelpers";
 import { deleteTaskAttachments } from "./tasks";
 import { validateTimezone, validateDigestTime } from "./validation";
 import { enforceRateLimit } from "./rateLimit";
@@ -76,17 +76,15 @@ export const updateSettings = mutation({
   },
   returns: v.null(),
   handler: async (ctx, updates) => {
-    const userId = await getAuthUserId(ctx);
-
     // digestTime controls workspace digest scheduling — owner-only
-    if (updates.digestTime !== undefined) {
-      await requireOwner(ctx);
-    }
+    const wsCtx = updates.digestTime !== undefined
+      ? await requireOwner(ctx)
+      : await getWorkspaceContext(ctx);
 
     if (updates.timezone !== undefined) validateTimezone(updates.timezone);
     if (updates.digestTime !== undefined) validateDigestTime(updates.digestTime);
 
-    await ctx.db.patch(userId, updates);
+    await ctx.db.patch(wsCtx.userId, updates);
     return null;
   },
 });
