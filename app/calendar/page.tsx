@@ -133,9 +133,9 @@ export default function CalendarPage() {
 
   return (
     <AppShell>
-      <div className="w-full max-w-sm mx-auto px-4 py-6">
+      <div className="w-full max-w-sm mx-auto px-4 py-4">
         {/* Month header */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-3">
           <button
             onClick={handlePrevMonth}
             className="flex h-9 w-9 items-center justify-center rounded-full text-text-muted hover:bg-surface hover:text-text-secondary transition-colors"
@@ -154,9 +154,9 @@ export default function CalendarPage() {
         </div>
 
         {/* Day headers */}
-        <div className="grid grid-cols-7 mb-2 px-1">
+        <div className="grid grid-cols-7 mb-1 px-1">
           {DAYS.map((d) => (
-            <div key={d} className="text-center text-[10px] font-medium text-text-muted uppercase tracking-[0.18em] py-2">
+            <div key={d} className="text-center text-[10px] font-medium text-text-muted uppercase tracking-[0.18em] py-1">
               {d}
             </div>
           ))}
@@ -174,7 +174,7 @@ export default function CalendarPage() {
               <button
                 key={day.dateStr}
                 onClick={() => setSelectedDate(day.dateStr === selectedDate ? null : day.dateStr)}
-                className={`relative aspect-square border-r border-b border-border p-2 text-left transition-colors duration-150 ${
+                className={`relative min-h-[48px] border-r border-b border-border p-1.5 text-left transition-colors duration-150 ${
                   isSelected
                     ? "bg-accent/12"
                     : day.isCurrentMonth
@@ -183,7 +183,7 @@ export default function CalendarPage() {
                 }`}
               >
                 <span
-                  className={`text-[12px] inline-flex items-center justify-center w-8 h-8 rounded-full ${
+                  className={`text-[11px] inline-flex items-center justify-center w-7 h-7 rounded-full ${
                     isToday
                       ? "bg-accent text-bg-base font-medium"
                       : day.isCurrentMonth
@@ -195,7 +195,7 @@ export default function CalendarPage() {
                 </span>
                 {/* Task dots */}
                 {dayTasks.length > 0 && (
-                  <div className="flex gap-1 mt-2 flex-wrap">
+                  <div className="flex gap-1 mt-1 flex-wrap">
                     {dayTasks.slice(0, 4).map((t) => (
                       <span
                         key={t._id}
@@ -217,8 +217,8 @@ export default function CalendarPage() {
 
         {/* Selected day task list */}
         {selectedDate && (
-          <div className="mt-4 bg-surface rounded-[14px] border border-border p-4">
-            <div className="flex items-center justify-between mb-3">
+          <div className="mt-3 bg-surface rounded-[14px] border border-border p-3">
+            <div className="flex items-center justify-between mb-2">
               <p className="text-[13px] font-medium text-text-primary">
                 {new Date(selectedDate + "T12:00:00").toLocaleDateString("en-US", {
                   weekday: "long",
