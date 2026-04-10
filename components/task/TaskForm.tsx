@@ -20,6 +20,7 @@ interface TaskFormProps {
   onDelete?: () => void;
   onClose: () => void;
   readOnly?: boolean;
+  isSaving?: boolean;
   children?: React.ReactNode;
 }
 
@@ -32,6 +33,7 @@ export function TaskForm({
   onDelete,
   onClose,
   readOnly = false,
+  isSaving = false,
   children,
 }: TaskFormProps) {
   const [title, setTitle] = useState(task?.title ?? prefill?.title ?? "");
@@ -368,10 +370,13 @@ export function TaskForm({
             </button>
             <button
               type="submit"
-              disabled={!title.trim()}
-              className="py-2.5 px-6 bg-accent text-bg-base rounded-[4px] text-[13px] font-medium hover:opacity-90 disabled:opacity-50 transition-opacity duration-200"
+              disabled={!title.trim() || isSaving}
+              className="py-2.5 px-6 bg-accent text-bg-base rounded-[4px] text-[13px] font-medium hover:opacity-90 disabled:opacity-50 transition-opacity duration-200 flex items-center gap-2"
             >
-              Save
+              {isSaving && (
+                <span className="w-3 h-3 border-2 border-bg-base/40 border-t-bg-base rounded-full animate-spin" />
+              )}
+              {isSaving ? "Saving…" : "Save"}
             </button>
           </div>
         )}

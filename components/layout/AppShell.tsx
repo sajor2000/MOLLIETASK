@@ -33,7 +33,7 @@ export function AppShell({
           searchQuery={searchQuery}
           onSearchChange={onSearchChange}
         />
-        <main className="flex-1 pb-[56px] md:pb-0">{children}</main>
+        <main className="flex-1 pb-[56px] md:pb-0 flex flex-col min-h-0">{children}</main>
       </div>
       <BottomNav />
     </div>

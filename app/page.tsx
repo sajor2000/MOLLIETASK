@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -83,6 +83,23 @@ export default function KanbanPage() {
     setPrefillData(undefined);
   };
 
+  // Keyboard shortcut: press N to open new task (owner only, not while typing)
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (!isOwner) return;
+      if (e.key !== "n" && e.key !== "N") return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target as HTMLElement;
+      const tag = el.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable) return;
+      if (isCreating || editingTask) return;
+      e.preventDefault();
+      setIsCreating(true);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isOwner, isCreating, editingTask, setIsCreating]);
+
   if (tasks === undefined) {
     return (
       <AppShell>
@@ -112,15 +129,31 @@ export default function KanbanPage() {
         ) : undefined
       }
     >
-      <div className="h-[calc(100dvh-64px-56px)] md:h-[calc(100dvh-64px)]">
-        <KanbanBoard
-          tasks={filteredTasks ?? []}
-          staffById={staffById}
-          onMoveTask={isOwner ? handleReorder : undefined}
-          onEditTask={setEditingTask}
-          onCompleteTask={handleComplete}
-          onClearCompleted={isOwner ? handleClearCompleted : undefined}
-        />
+      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+        {/* Mobile-only AI capture bar (desktop version lives in the top bar) */}
+        {isOwner && (
+          <div className="md:hidden shrink-0 px-4 py-2 border-b border-border/50">
+            <AiCaptureBar
+              tasks={tasks}
+              staffMembers={staffList ?? []}
+              onAddTask={handleAiAddTask}
+              onEditTask={handleAiEditTask}
+              onCompleteTask={handleComplete}
+              onDeleteTask={handleDelete}
+              fullWidth
+            />
+          </div>
+        )}
+        <div className="flex-1 min-h-0">
+          <KanbanBoard
+            tasks={filteredTasks ?? []}
+            staffById={staffById}
+            onMoveTask={isOwner ? handleReorder : undefined}
+            onEditTask={setEditingTask}
+            onCompleteTask={handleComplete}
+            onClearCompleted={isOwner ? handleClearCompleted : undefined}
+          />
+        </div>
       </div>
 
       <TaskOverlays

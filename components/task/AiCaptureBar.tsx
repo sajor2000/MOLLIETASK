@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, memo } from "react";
+import { useState, useRef, memo, useCallback } from "react";
 import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Icon } from "@/components/ui/Icon";
@@ -24,6 +24,8 @@ interface AiCaptureBarProps {
   onEditTask: (task: Doc<"tasks">, changes: Partial<TaskFormData>) => void;
   onCompleteTask: (taskId: Id<"tasks">) => void;
   onDeleteTask: (taskId: Id<"tasks">) => void;
+  /** Stretch to fill parent width instead of fixed w-64 */
+  fullWidth?: boolean;
 }
 
 export const AiCaptureBar = memo(function AiCaptureBar({
@@ -33,11 +35,13 @@ export const AiCaptureBar = memo(function AiCaptureBar({
   onEditTask,
   onCompleteTask,
   onDeleteTask,
+  fullWidth = false,
 }: AiCaptureBarProps) {
   const parseIntent = useAction(api.aiActions.parseTaskIntent);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ taskId: Id<"tasks">; title: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Single derivation of active tasks — used for both context and index lookup
@@ -142,10 +146,9 @@ export const AiCaptureBar = memo(function AiCaptureBar({
           return;
         }
 
-        if (window.confirm(`Delete "${task.title}"?`)) {
-          onDeleteTask(task._id);
-          setInput("");
-        }
+        setPendingDelete({ taskId: task._id, title: task.title });
+        setInput("");
+        return;
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Unknown error";
@@ -161,12 +164,19 @@ export const AiCaptureBar = memo(function AiCaptureBar({
     }
   }
 
+  const confirmDelete = useCallback(() => {
+    if (!pendingDelete) return;
+    onDeleteTask(pendingDelete.taskId);
+    setPendingDelete(null);
+    inputRef.current?.focus();
+  }, [pendingDelete, onDeleteTask]);
+
   return (
     <div className="relative">
       <div className="relative flex items-center">
         <Icon
           name="auto_awesome"
-          className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${
+          className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 flex-shrink-0 ${
             isLoading ? "text-accent animate-pulse" : "text-text-muted"
           }`}
         />
@@ -177,22 +187,64 @@ export const AiCaptureBar = memo(function AiCaptureBar({
           onChange={(e) => {
             setInput(e.target.value);
             setError(null);
+            setPendingDelete(null);
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               handleSubmit();
             }
+            if (e.key === "Escape") {
+              setPendingDelete(null);
+              setError(null);
+            }
           }}
-          placeholder="Add a task... try natural language"
+          placeholder="Add a task… try natural language"
           disabled={isLoading}
           maxLength={500}
-          className="bg-bg-base border border-outline-variant/10 rounded-[4px] pl-9 pr-4 py-1.5 text-[12px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 w-64 disabled:opacity-60"
+          className={`bg-bg-base border border-outline-variant/10 rounded-[4px] pl-9 pr-9 py-1.5 text-[12px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 disabled:opacity-60 ${
+            fullWidth ? "w-full" : "w-64"
+          }`}
         />
+        {/* Send button */}
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={isLoading || !input.trim()}
+          aria-label="Send"
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-accent disabled:opacity-30 transition-colors duration-150"
+        >
+          <Icon name="arrow_upward" className="w-4 h-4" />
+        </button>
       </div>
 
+      {/* Inline delete confirmation */}
+      {pendingDelete && (
+        <div className="absolute top-full left-0 mt-1 z-50 bg-surface border border-border rounded-[4px] p-3 w-full min-w-[220px] shadow-lg">
+          <p className="text-[12px] text-text-secondary mb-2 truncate">
+            Delete &ldquo;{pendingDelete.title}&rdquo;?
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={confirmDelete}
+              className="flex-1 py-1 text-[12px] font-medium bg-destructive/15 text-destructive rounded-[4px] hover:bg-destructive/25 transition-colors"
+            >
+              Delete
+            </button>
+            <button
+              type="button"
+              onClick={() => { setPendingDelete(null); inputRef.current?.focus(); }}
+              className="flex-1 py-1 text-[12px] text-text-muted bg-surface-elevated rounded-[4px] hover:text-text-secondary transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Error message */}
-      {error && (
+      {error && !pendingDelete && (
         <div className="absolute top-full left-0 mt-1 z-50">
           <p className="text-[11px] text-destructive">{error}</p>
         </div>

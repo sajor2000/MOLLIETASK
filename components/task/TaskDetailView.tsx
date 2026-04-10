@@ -119,6 +119,7 @@ export function TaskDetailView({
             onDelete={readOnly ? undefined : onDelete}
             onClose={guardedClose}
             readOnly={readOnly}
+            isSaving={saving}
           >
             {task?._id && <SubtaskList parentTaskId={task._id} readOnly={readOnly} />}
           </TaskForm>
