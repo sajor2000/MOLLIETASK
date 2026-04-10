@@ -258,7 +258,6 @@ export default function CalendarPage() {
         isCreating={isCreating}
         prefill={createPrefill}
         staffMembers={staffList ?? []}
-        isOwner={isOwner}
         isMember={isMember}
         onSave={handleSave}
         onDelete={handleDelete}

@@ -11,7 +11,6 @@ interface TaskOverlaysProps {
   isCreating: boolean;
   prefill?: Partial<TaskFormData>;
   staffMembers: Doc<"staffMembers">[];
-  isOwner: boolean;
   isMember: boolean;
   onSave: (data: TaskFormData) => void | Promise<void>;
   onDelete: (taskId: Id<"tasks">) => void | Promise<void>;
@@ -28,7 +27,6 @@ export function TaskOverlays({
   isCreating,
   prefill,
   staffMembers,
-  isOwner,
   isMember,
   onSave,
   onDelete,

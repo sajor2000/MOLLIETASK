@@ -23,7 +23,7 @@ export default function TodayPage() {
     rangeStartTs: 0,
     rangeEndTs: todayEndTs,
   });
-  const staffList = useQuery(api.staff.listStaff, isMember ? "skip" : {});
+  const staffList = useQuery(api.staff.listStaff, isOwner ? {} : "skip");
   const {
     editingTask,
     setEditingTask,
@@ -152,7 +152,6 @@ export default function TodayPage() {
         isCreating={isCreating}
         prefill={isCreating ? todayPrefill : undefined}
         staffMembers={staffList ?? []}
-        isOwner={isOwner}
         isMember={isMember}
         onSave={handleSave}
         onDelete={handleDelete}

@@ -24,7 +24,7 @@ const TemplateLibrary = dynamic(
 export default function KanbanPage() {
   const { isOwner, isMember } = useWorkspace();
   const tasks = useQuery(api.tasks.getTasksByStatus, {});
-  const staffList = useQuery(api.staff.listStaff, isMember ? "skip" : {});
+  const staffList = useQuery(api.staff.listStaff, isOwner ? {} : "skip");
   const {
     editingTask,
     setEditingTask,
@@ -96,7 +96,7 @@ export default function KanbanPage() {
 
   if (tasks === undefined) {
     return (
-      <AppShell onAddTask={() => setIsCreating(true)}>
+      <AppShell onAddTask={isMember ? undefined : () => setIsCreating(true)}>
         <div className="flex gap-0 h-full overflow-x-auto">
           {["todo", "inprogress", "done"].map((col) => (
             <div key={col} className="flex-1 min-w-[280px] px-3 py-4">
@@ -162,7 +162,6 @@ export default function KanbanPage() {
         isCreating={isCreating}
         prefill={isCreating ? prefillData : undefined}
         staffMembers={staffList ?? []}
-        isOwner={isOwner}
         isMember={isMember}
         onSave={handleSave}
         onDelete={handleDelete}
