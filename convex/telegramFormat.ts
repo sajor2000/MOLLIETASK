@@ -92,6 +92,9 @@ export const HELP_TEXT = `Available commands:
 /delete 3 \u2014 Delete task #3 from list
 /delete Buy supplies \u2014 Delete task by name
 /edit 3 change priority to high \u2014 Edit task #3
+/search supplies \u2014 Search tasks by keyword
+/templates \u2014 List task templates
+/use 3 \u2014 Create task from template #3
 /subtasks 3 \u2014 List subtasks for task #3
 /addsub 3 Order supplies \u2014 Add subtask to task #3
 /donesub 3.1 \u2014 Toggle subtask #1 of task #3
@@ -103,4 +106,5 @@ export const HELP_TEXT = `Available commands:
 
 You can also type naturally:
 "Call insurance company tomorrow" \u2014 AI adds task with due date
-"Mark buy supplies done" \u2014 AI completes matching task`;
+"Mark buy supplies done" \u2014 AI completes matching task
+"Delete the supplies task" \u2014 AI deletes matching task`;

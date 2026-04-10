@@ -27,6 +27,7 @@ import type * as taskTemplates from "../taskTemplates.js";
 import type * as tasks from "../tasks.js";
 import type * as telegram from "../telegram.js";
 import type * as telegramBot from "../telegramBot.js";
+import type * as telegramCommands from "../telegramCommands.js";
 import type * as telegramFormat from "../telegramFormat.js";
 import type * as users from "../users.js";
 import type * as validation from "../validation.js";
@@ -58,6 +59,7 @@ declare const fullApi: ApiFromModules<{
   tasks: typeof tasks;
   telegram: typeof telegram;
   telegramBot: typeof telegramBot;
+  telegramCommands: typeof telegramCommands;
   telegramFormat: typeof telegramFormat;
   users: typeof users;
   validation: typeof validation;
