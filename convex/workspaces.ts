@@ -35,13 +35,14 @@ export const generateInvite = mutation({
       }
     }
 
-    // Generate a unique token (same pattern as Telegram link tokens)
-    const chars =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    let token = "";
-    for (let i = 0; i < 32; i++) {
-      token += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
+    // Generate a cryptographically secure token using Web Crypto (available in Convex V8)
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    const token = btoa(String.fromCharCode(...bytes))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=/g, "")
+      .slice(0, 32);
 
     const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
     await ctx.db.insert("workspaceInvites", {
@@ -65,6 +66,11 @@ export const consumeInvite = mutation({
     error: v.optional(v.string()),
   }),
   handler: async (ctx, { token }) => {
+    // Validate format before hitting the DB (32 base64url chars)
+    if (!/^[A-Za-z0-9_-]{32}$/.test(token)) {
+      return { success: false, error: "Invalid invite link" };
+    }
+
     const userId = await getAuthUserId(ctx);
 
     const invite = await ctx.db

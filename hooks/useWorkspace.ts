@@ -5,11 +5,12 @@ import { api } from "@/convex/_generated/api";
 
 export function useWorkspace() {
   const me = useQuery(api.users.getMe);
-  const role = me?.workspaceRole ?? "owner";
+  const isLoading = me === undefined;
+  const role = me?.workspaceRole ?? null;
   return {
     role,
-    isOwner: role === "owner",
-    isMember: role === "member",
-    isLoading: me === undefined,
+    isOwner: !isLoading && role === "owner",
+    isMember: !isLoading && role === "member",
+    isLoading,
   } as const;
 }

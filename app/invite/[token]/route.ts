@@ -1,6 +1,5 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { withAuth } from "@workos-inc/authkit-nextjs";
+import { auth } from "@clerk/nextjs/server";
 
 export async function GET(
   _request: Request,
@@ -8,27 +7,21 @@ export async function GET(
 ) {
   const { token } = await params;
 
-  // Validate token format (32 alphanumeric chars)
-  if (!/^[A-Za-z0-9]{32}$/.test(token)) {
+  // Validate token format (32 base64url chars: A-Za-z0-9-_)
+  if (!/^[A-Za-z0-9_-]{32}$/.test(token)) {
     redirect("/sign-in");
   }
 
-  // Store token in cookie for consumption after auth
-  const cookieStore = await cookies();
-  cookieStore.set("invite_token", token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 3600, // 1 hour
-    path: "/",
-  });
-
-  // If already authenticated, go straight to app (it will consume the invite)
-  const { user } = await withAuth();
-  if (user) {
-    redirect("/");
+  // Pass the token as a URL parameter rather than a JS-readable cookie.
+  // This avoids XSS-exploitable persistent storage — the token lives only in
+  // the URL during the redirect and is removed from the address bar by
+  // ConsumeInviteToken after successful consumption.
+  const { userId } = await auth();
+  if (userId) {
+    // Already authenticated — land on the app and let ConsumeInviteToken handle it
+    redirect(`/?token=${token}`);
   }
 
-  // Not authenticated — send to sign-up
-  redirect("/sign-up");
+  // Not authenticated — Clerk will redirect to /?token=... after sign-up
+  redirect(`/sign-up?redirect_url=${encodeURIComponent(`/?token=${token}`)}`);
 }

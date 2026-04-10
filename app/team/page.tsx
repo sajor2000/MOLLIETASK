@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
@@ -13,11 +13,11 @@ export default function TeamPage() {
   const { isMember, isLoading: wsLoading } = useWorkspace();
   const router = useRouter();
 
-  // Route guard: members cannot access team page
-  if (!wsLoading && isMember) {
-    router.push("/");
-    return null;
-  }
+  useEffect(() => {
+    if (!wsLoading && isMember) router.push("/");
+  }, [wsLoading, isMember, router]);
+
+  if (!wsLoading && isMember) return null;
 
   return <TeamPageContent />;
 }
@@ -194,7 +194,10 @@ function TeamPageContent() {
     [staff, orderedIds, reorderStaff],
   );
 
-  if (user === undefined) {
+  // Show spinner for both undefined (query in-flight) and null (Clerk authenticated
+  // but StoreUser hasn't written the record yet). Middleware handles truly
+  // unauthenticated users before they reach this page.
+  if (!user) {
     return (
       <AppShell>
         <div className="flex items-center justify-center h-[calc(100dvh-64px)]">
@@ -202,11 +205,6 @@ function TeamPageContent() {
         </div>
       </AppShell>
     );
-  }
-
-  if (user === null) {
-    router.push("/sign-in");
-    return null;
   }
 
   if (staff === undefined) {

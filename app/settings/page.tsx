@@ -24,7 +24,10 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  if (user === undefined) {
+  // Show spinner for both undefined (query in-flight) and null (Clerk authenticated
+  // but StoreUser hasn't written the record yet). Middleware handles truly
+  // unauthenticated users before they reach this page.
+  if (!user) {
     return (
       <AppShell>
         <div className="flex items-center justify-center h-[calc(100dvh-64px)]">
@@ -32,11 +35,6 @@ export default function SettingsPage() {
         </div>
       </AppShell>
     );
-  }
-
-  if (user === null) {
-    router.push("/sign-in");
-    return null;
   }
 
   async function handleTimezone(tz: string) {

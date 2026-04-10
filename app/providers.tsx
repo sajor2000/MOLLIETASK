@@ -1,136 +1,93 @@
 "use client";
 
-import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useRef } from "react";
 import {
   ConvexReactClient,
   useMutation,
-  ConvexProviderWithAuth,
+  useQuery,
+  useConvexAuth,
   Authenticated,
 } from "convex/react";
-import {
-  AuthKitProvider,
-  useAuth,
-  useAccessToken,
-} from "@workos-inc/authkit-nextjs/components";
+import { ConvexProviderWithClerk } from "convex/react-clerk";
+import { useAuth } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 
 const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 /**
- * Calls the users.store mutation once per session to ensure the authenticated
- * user has a record in the Convex users table. Renders children only after
- * the store completes, preventing "User not found" errors on first login.
+ * Calls users.store once after Convex confirms authentication.
+ * Side-effect only — does not gate rendering.
  */
-function StoreUser({ children }: { children: ReactNode }) {
+function StoreUser() {
+  const { isAuthenticated } = useConvexAuth();
   const storeUser = useMutation(api.users.store);
-  const [ready, setReady] = useState(false);
+  const hasCalled = useRef(false);
 
   useEffect(() => {
-    storeUser()
-      .then(() => setReady(true))
-      .catch((err) => {
-        console.error("Failed to store user:", err);
-        // Still render children so the app is usable even if store fails
-        setReady(true);
-      });
-  }, [storeUser]);
+    if (!isAuthenticated || hasCalled.current) return;
+    hasCalled.current = true;
+    storeUser().catch((err) => console.error("Failed to store user:", err));
+  }, [isAuthenticated, storeUser]);
 
-  if (!ready) return null;
-  return <>{children}</>;
+  return null;
 }
 
 /**
- * Checks for a pending invite token cookie (set by /invite/[token] route)
- * and consumes it to join the workspace. Runs once after StoreUser.
+ * Reads the invite token from the URL (?token=...) and calls consumeInvite
+ * once. Only rendered after getMe confirms the user record exists in Convex,
+ * ensuring StoreUser has committed before consumeInvite runs.
  */
-function ConsumeInviteToken({ children }: { children: ReactNode }) {
+function ConsumeInviteToken() {
   const consumeInvite = useMutation(api.workspaces.consumeInvite);
+  const router = useRouter();
   const consumed = useRef(false);
 
   useEffect(() => {
     if (consumed.current) return;
 
-    const token = document.cookie
-      .split("; ")
-      .find((c) => c.startsWith("invite_token="))
-      ?.split("=")[1];
-
+    const token = new URLSearchParams(window.location.search).get("token");
     if (!token) return;
+
     consumed.current = true;
-
-    // Clear the cookie immediately
-    document.cookie = "invite_token=; path=/; max-age=0";
-
     consumeInvite({ token })
       .then((result) => {
         if (result.success) {
-          // Reload to pick up new workspace context
-          window.location.reload();
+          // Remove token from URL without a full page reload
+          router.replace(window.location.pathname);
         } else {
+          consumed.current = false;
           console.error("Failed to consume invite:", result.error);
         }
       })
       .catch((err) => {
+        consumed.current = false;
         console.error("Error consuming invite:", err);
       });
-  }, [consumeInvite]);
+  }, [consumeInvite, router]);
 
-  return <>{children}</>;
+  return null;
+}
+
+/**
+ * Gates ConsumeInviteToken until getMe returns a non-null user, which confirms
+ * StoreUser has committed the user record. Without this gate, consumeInvite
+ * fails silently for brand-new users whose Convex record doesn't exist yet.
+ */
+function ConsumeInviteTokenGated() {
+  const me = useQuery(api.users.getMe);
+  if (!me) return null;
+  return <ConsumeInviteToken />;
 }
 
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
   return (
-    <AuthKitProvider>
-      <ConvexProviderWithAuth client={convex} useAuth={useAuthFromAuthKit}>
-        <Authenticated>
-          <StoreUser>
-            <ConsumeInviteToken>{children}</ConsumeInviteToken>
-          </StoreUser>
-        </Authenticated>
-      </ConvexProviderWithAuth>
-    </AuthKitProvider>
+    <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
+      <Authenticated>
+        <StoreUser />
+        <ConsumeInviteTokenGated />
+      </Authenticated>
+      {children}
+    </ConvexProviderWithClerk>
   );
-}
-
-function useAuthFromAuthKit() {
-  const { user, loading: isLoading } = useAuth();
-  const {
-    accessToken,
-    loading: tokenLoading,
-    error: tokenError,
-  } = useAccessToken();
-  const loading = (isLoading ?? false) || (tokenLoading ?? false);
-  const authenticated = !!user && !!accessToken && !loading;
-
-  // Hold the last valid token to avoid returning null during refresh.
-  // Updated in useEffect to comply with React's pure-render expectations.
-  const stableAccessToken = useRef<string | null>(null);
-  useEffect(() => {
-    if (tokenError || !accessToken) {
-      stableAccessToken.current = null;
-    } else {
-      stableAccessToken.current = accessToken;
-    }
-  }, [accessToken, tokenError]);
-
-  const fetchAccessToken = useCallback(
-    async ({ forceRefreshToken }: { forceRefreshToken: boolean }) => {
-      // When Convex requests a forced refresh, return the live hook value
-      // rather than the cached ref so token rotation takes effect.
-      if (forceRefreshToken) {
-        return accessToken ?? null;
-      }
-      if (stableAccessToken.current && !tokenError) {
-        return stableAccessToken.current;
-      }
-      return accessToken ?? null;
-    },
-    [accessToken, tokenError],
-  );
-
-  return {
-    isLoading: loading,
-    isAuthenticated: authenticated,
-    fetchAccessToken,
-  };
 }

@@ -30,7 +30,7 @@ export default function CalendarPage() {
     () => (todoTasks && inProgressTasks ? [...todoTasks, ...inProgressTasks] : undefined),
     [todoTasks, inProgressTasks],
   );
-  const staffList = useQuery(api.staff.listStaff);
+  const staffList = useQuery(api.staff.listStaff, isOwner ? {} : "skip");
   const {
     editingTask,
     setEditingTask,

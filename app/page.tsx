@@ -32,7 +32,7 @@ const TemplateLibrary = dynamic(
 export default function KanbanPage() {
   const { isOwner, isMember } = useWorkspace();
   const tasks = useQuery(api.tasks.getTasksByStatus, {});
-  const staffList = useQuery(api.staff.listStaff);
+  const staffList = useQuery(api.staff.listStaff, isOwner ? {} : "skip");
   const {
     editingTask,
     setEditingTask,

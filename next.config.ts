@@ -7,12 +7,13 @@ import type { NextConfig } from "next";
 // which auto-escapes output). Revisit when Next.js nonce support matures.
 const cspHeader = `
   default-src 'self';
-  script-src 'self' 'unsafe-inline';
+  script-src 'self' 'unsafe-inline' https://*.clerk.accounts.dev https://*.clerk.com;
   style-src 'self' 'unsafe-inline';
   font-src 'self';
   worker-src 'self';
-  connect-src 'self' https://*.convex.cloud wss://*.convex.cloud https://api.workos.com;
-  img-src 'self' blob: data:;
+  connect-src 'self' https://*.convex.cloud wss://*.convex.cloud https://*.clerk.accounts.dev https://clerk.shorelinetask.space https://*.clerk.com;
+  frame-src 'self' https://*.clerk.accounts.dev https://clerk.shorelinetask.space https://*.clerk.com;
+  img-src 'self' blob: data: https://img.clerk.com https://www.gravatar.com;
   object-src 'none';
   base-uri 'self';
   form-action 'self';

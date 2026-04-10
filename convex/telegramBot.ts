@@ -59,12 +59,24 @@ export const getTasksForTelegram = internalQuery({
   ),
   handler: async (ctx, { userId, statusFilter }) => {
     const status = statusFilter ?? "todo";
-    const tasks = await ctx.db
-      .query("tasks")
-      .withIndex("by_userId_status_sortOrder", (q) =>
-        q.eq("userId", userId).eq("status", status),
-      )
-      .take(50);
+    const user = await ctx.db.get(userId);
+    const workspaceId = user?.activeWorkspaceId;
+
+    // Use workspace-scoped index when the user has an active workspace,
+    // otherwise fall back to the legacy userId-scoped index.
+    const tasks = workspaceId
+      ? await ctx.db
+          .query("tasks")
+          .withIndex("by_workspaceId_status_sortOrder", (q) =>
+            q.eq("workspaceId", workspaceId).eq("status", status),
+          )
+          .take(50)
+      : await ctx.db
+          .query("tasks")
+          .withIndex("by_userId_status_sortOrder", (q) =>
+            q.eq("userId", userId).eq("status", status),
+          )
+          .take(50);
 
     return tasks.map((t) => ({
       _id: t._id,
@@ -93,11 +105,14 @@ export const addTaskFromTelegram = internalMutation({
   },
   returns: v.id("tasks"),
   handler: async (ctx, { userId, title, workstream, priority, ...optional }) => {
+    const user = await ctx.db.get(userId);
+    const workspaceId = user?.activeWorkspaceId;
     return await insertTaskCore(ctx, userId, {
       title,
       workstream,
       priority,
       status: "todo",
+      workspaceId,
       ...optional,
     });
   },

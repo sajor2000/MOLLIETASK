@@ -93,14 +93,14 @@ export const generateTelegramLinkToken = mutation({
     const userId = await getAuthUserId(ctx);
     await enforceRateLimit(ctx, userId, "generateTelegramLinkToken", 30_000);
 
-    // Convex runtime seeds Math.random() per invocation for determinism.
-    // Using it with a large character set + 32 chars gives sufficient entropy
-    // for a short-lived 10-minute linking token.
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    let token = "";
-    for (let i = 0; i < 32; i++) {
-      token += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
+    // Generate a cryptographically secure token using Web Crypto (available in Convex V8)
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    const token = btoa(String.fromCharCode(...bytes))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=/g, "")
+      .slice(0, 32);
 
     const expiry = Date.now() + 10 * 60 * 1000; // 10 minutes
 
