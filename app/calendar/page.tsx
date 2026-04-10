@@ -133,12 +133,12 @@ export default function CalendarPage() {
 
   return (
     <AppShell>
-      <div className="max-w-2xl mx-auto px-4 py-6">
+      <div className="w-full max-w-sm mx-auto px-4 py-6">
         {/* Month header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <button
             onClick={handlePrevMonth}
-            className="p-2 text-text-muted hover:text-text-secondary transition-colors"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-text-muted hover:bg-surface hover:text-text-secondary transition-colors"
           >
             <Icon name="chevron_left" className="w-5 h-5" />
           </button>
@@ -147,23 +147,24 @@ export default function CalendarPage() {
           </h1>
           <button
             onClick={handleNextMonth}
-            className="p-2 text-text-muted hover:text-text-secondary transition-colors"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-text-muted hover:bg-surface hover:text-text-secondary transition-colors"
           >
             <Icon name="chevron_right" className="w-5 h-5" />
           </button>
         </div>
 
         {/* Day headers */}
-        <div className="grid grid-cols-7 mb-1">
+        <div className="grid grid-cols-7 mb-2 px-1">
           {DAYS.map((d) => (
-            <div key={d} className="text-center text-[11px] font-medium text-text-muted uppercase tracking-wider py-2">
+            <div key={d} className="text-center text-[10px] font-medium text-text-muted uppercase tracking-[0.18em] py-2">
               {d}
             </div>
           ))}
         </div>
 
         {/* Calendar grid */}
-        <div className="grid grid-cols-7 border-t border-l border-border">
+        <div className="overflow-hidden rounded-[14px] border border-border bg-surface shadow-[0_0_0_1px_rgba(255,255,255,0.01)]">
+          <div className="grid grid-cols-7">
           {calendarDays.map((day) => {
             const dayTasks = tasksByDate.get(day.dateStr) ?? [];
             const isToday = day.dateStr === todayStr;
@@ -173,16 +174,16 @@ export default function CalendarPage() {
               <button
                 key={day.dateStr}
                 onClick={() => setSelectedDate(day.dateStr === selectedDate ? null : day.dateStr)}
-                className={`relative border-r border-b border-border p-1.5 min-h-[64px] md:min-h-[80px] text-left transition-colors duration-150 ${
+                className={`relative aspect-square border-r border-b border-border p-2 text-left transition-colors duration-150 ${
                   isSelected
-                    ? "bg-accent/10"
+                    ? "bg-accent/12"
                     : day.isCurrentMonth
                       ? "bg-surface hover:bg-surface-elevated"
-                      : "bg-bg-base"
+                      : "bg-bg-base/70"
                 }`}
               >
                 <span
-                  className={`text-[12px] inline-flex items-center justify-center w-6 h-6 rounded-full ${
+                  className={`text-[12px] inline-flex items-center justify-center w-8 h-8 rounded-full ${
                     isToday
                       ? "bg-accent text-bg-base font-medium"
                       : day.isCurrentMonth
@@ -194,7 +195,7 @@ export default function CalendarPage() {
                 </span>
                 {/* Task dots */}
                 {dayTasks.length > 0 && (
-                  <div className="flex gap-0.5 mt-1 flex-wrap">
+                  <div className="flex gap-1 mt-2 flex-wrap">
                     {dayTasks.slice(0, 4).map((t) => (
                       <span
                         key={t._id}
@@ -211,11 +212,12 @@ export default function CalendarPage() {
               </button>
             );
           })}
+          </div>
         </div>
 
         {/* Selected day task list */}
         {selectedDate && (
-          <div className="mt-4 bg-surface rounded-[4px] border border-border p-4">
+          <div className="mt-4 bg-surface rounded-[14px] border border-border p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[13px] font-medium text-text-primary">
                 {new Date(selectedDate + "T12:00:00").toLocaleDateString("en-US", {
