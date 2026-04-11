@@ -35,7 +35,7 @@ export function SearchInput({ value, onChange }: SearchInputProps) {
         value={localValue}
         onChange={(e) => handleChange(e.target.value)}
         placeholder="Search tasks..."
-        className="bg-bg-base border border-outline-variant/10 rounded-[4px] pl-9 pr-8 py-1.5 text-[12px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 w-48"
+        className="bg-bg-base border border-outline-variant/10 rounded-[4px] pl-9 pr-8 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors duration-200 w-full md:w-48"
       />
       {localValue && (
         <button

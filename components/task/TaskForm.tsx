@@ -327,7 +327,7 @@ export function TaskForm({
             <button
               type="button"
               onClick={onClose}
-              className="py-2.5 px-6 bg-surface text-text-secondary rounded-[4px] text-[13px] font-medium hover:bg-surface-elevated transition-colors duration-200"
+              className="py-3 px-6 bg-surface text-text-secondary rounded-[4px] text-[13px] font-medium hover:bg-surface-elevated transition-colors duration-200"
             >
               Close
             </button>
@@ -337,14 +337,14 @@ export function TaskForm({
             <button
               type="button"
               onClick={onDelete}
-              className="flex-1 py-2.5 bg-destructive/15 text-destructive rounded-[4px] text-[13px] font-medium hover:bg-destructive/25 transition-colors duration-200"
+              className="flex-1 py-3 bg-destructive/15 text-destructive rounded-[4px] text-[13px] font-medium hover:bg-destructive/25 transition-colors duration-200"
             >
               Confirm delete
             </button>
             <button
               type="button"
               onClick={() => setShowDeleteConfirm(false)}
-              className="flex-1 py-2.5 bg-surface text-text-secondary rounded-[4px] text-[13px] font-medium hover:bg-surface-elevated transition-colors duration-200"
+              className="flex-1 py-3 bg-surface text-text-secondary rounded-[4px] text-[13px] font-medium hover:bg-surface-elevated transition-colors duration-200"
             >
               Cancel
             </button>
@@ -355,7 +355,7 @@ export function TaskForm({
               <button
                 type="button"
                 onClick={() => setShowDeleteConfirm(true)}
-                className="py-2.5 px-4 bg-destructive/10 text-destructive rounded-[4px] text-[13px] font-medium hover:bg-destructive/20 transition-colors duration-200"
+                className="py-3 px-4 bg-destructive/10 text-destructive rounded-[4px] text-[13px] font-medium hover:bg-destructive/20 transition-colors duration-200"
               >
                 Delete
               </button>
@@ -364,14 +364,14 @@ export function TaskForm({
             <button
               type="button"
               onClick={onClose}
-              className="py-2.5 px-4 text-text-secondary text-[13px] hover:text-text-primary transition-colors duration-200"
+              className="py-3 px-4 text-text-secondary text-[13px] hover:text-text-primary transition-colors duration-200"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!title.trim() || isSaving}
-              className="py-2.5 px-6 bg-accent text-bg-base rounded-[4px] text-[13px] font-medium hover:opacity-90 disabled:opacity-50 transition-opacity duration-200 flex items-center gap-2"
+              className="py-3 px-6 bg-accent text-bg-base rounded-[4px] text-[13px] font-medium hover:opacity-90 disabled:opacity-50 transition-opacity duration-200 flex items-center gap-2"
             >
               {isSaving && (
                 <span className="w-3 h-3 border-2 border-bg-base/40 border-t-bg-base rounded-full animate-spin" />

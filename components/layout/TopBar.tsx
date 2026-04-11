@@ -23,7 +23,7 @@ export function TopBar({ onAddTask, onOpenTemplates, topBarExtra, searchQuery, o
   );
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between h-16 px-8 bg-surface/80 backdrop-blur-md border-b border-border">
+    <header className="sticky top-0 z-30 flex items-center justify-between h-16 px-4 md:px-8 bg-surface/80 backdrop-blur-md border-b border-border">
       <div className="flex items-center gap-4 min-w-0">
         {/* Mobile: search expanded replaces title */}
         {mobileSearchOpen && onSearchChange ? (
@@ -52,7 +52,7 @@ export function TopBar({ onAddTask, onOpenTemplates, topBarExtra, searchQuery, o
         )}
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 md:gap-4">
         {/* Desktop search */}
         {onSearchChange && (
           <div className="hidden md:flex">
@@ -68,7 +68,7 @@ export function TopBar({ onAddTask, onOpenTemplates, topBarExtra, searchQuery, o
         {onSearchChange && !mobileSearchOpen && (
           <button
             onClick={() => setMobileSearchOpen(true)}
-            className="md:hidden text-text-muted hover:text-text-secondary transition-colors"
+            className="md:hidden p-2 text-text-muted hover:text-text-secondary transition-colors"
             aria-label="Search"
           >
             <Icon name="search" className="w-5 h-5" />
@@ -88,10 +88,10 @@ export function TopBar({ onAddTask, onOpenTemplates, topBarExtra, searchQuery, o
         {onAddTask && (
           <button
             onClick={onAddTask}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-accent text-bg-base text-[12px] font-medium rounded-[4px] hover:opacity-90 transition-opacity duration-200"
+            className="flex items-center gap-1.5 px-3 py-2 md:px-4 md:py-1.5 bg-accent text-bg-base text-[12px] font-medium rounded-[4px] hover:opacity-90 transition-opacity duration-200"
           >
             <Icon name="add" className="w-[18px] h-[18px]" />
-            <span>Add Task</span>
+            <span className="hidden md:inline">Add Task</span>
           </button>
         )}
       </div>
