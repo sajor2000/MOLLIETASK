@@ -133,9 +133,9 @@ export default function CalendarPage() {
 
   return (
     <AppShell>
-      <div className="w-full max-w-sm mx-auto px-4 py-4">
+      <div className="w-full max-w-2xl mx-auto px-4 py-4 flex flex-col gap-3">
         {/* Month header */}
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between">
           <button
             onClick={handlePrevMonth}
             className="flex h-9 w-9 items-center justify-center rounded-full text-text-muted hover:bg-surface hover:text-text-secondary transition-colors"
@@ -154,7 +154,7 @@ export default function CalendarPage() {
         </div>
 
         {/* Day headers */}
-        <div className="grid grid-cols-7 mb-1 px-1">
+        <div className="grid grid-cols-7 px-0.5">
           {DAYS.map((d) => (
             <div key={d} className="text-center text-[10px] font-medium text-text-muted uppercase tracking-[0.18em] py-1">
               {d}
@@ -163,7 +163,7 @@ export default function CalendarPage() {
         </div>
 
         {/* Calendar grid */}
-        <div className="overflow-hidden rounded-[14px] border border-border bg-surface shadow-[0_0_0_1px_rgba(255,255,255,0.01)]">
+        <div className="overflow-hidden rounded-[10px] border border-border bg-surface">
           <div className="grid grid-cols-7">
           {calendarDays.map((day) => {
             const dayTasks = tasksByDate.get(day.dateStr) ?? [];
@@ -174,39 +174,48 @@ export default function CalendarPage() {
               <button
                 key={day.dateStr}
                 onClick={() => setSelectedDate(day.dateStr === selectedDate ? null : day.dateStr)}
-                className={`relative min-h-[48px] border-r border-b border-border p-1.5 text-left transition-colors duration-150 ${
+                className={`relative min-h-[56px] md:min-h-[72px] border-r border-b border-border p-1 md:p-1.5 text-left transition-colors duration-150 ${
                   isSelected
                     ? "bg-accent/12"
                     : day.isCurrentMonth
                       ? "bg-surface hover:bg-surface-elevated"
-                      : "bg-bg-base/70"
+                      : "bg-bg-base/60"
                 }`}
               >
                 <span
-                  className={`text-[11px] inline-flex items-center justify-center w-7 h-7 rounded-full ${
+                  className={`text-[11px] inline-flex items-center justify-center w-6 h-6 rounded-full ${
                     isToday
                       ? "bg-accent text-bg-base font-medium"
                       : day.isCurrentMonth
                         ? "text-text-primary"
-                        : "text-text-muted"
+                        : "text-text-muted/60"
                   }`}
                 >
                   {day.date}
                 </span>
-                {/* Task dots */}
+                {/* Task indicators */}
                 {dayTasks.length > 0 && (
-                  <div className="flex gap-1 mt-1 flex-wrap">
-                    {dayTasks.slice(0, 4).map((t) => (
-                      <span
-                        key={t._id}
-                        className={`w-1.5 h-1.5 rounded-full ${WORKSTREAM_CONFIG[t.workstream].bgClass}`}
-                      />
-                    ))}
-                    {dayTasks.length > 4 && (
-                      <span className="text-[9px] text-text-muted leading-none">
-                        +{dayTasks.length - 4}
-                      </span>
-                    )}
+                  <div className="mt-0.5">
+                    {/* Mobile: count badge */}
+                    <span className="md:hidden text-[9px] font-medium px-1 py-0.5 rounded-[3px] bg-accent/15 text-accent">
+                      {dayTasks.length}
+                    </span>
+                    {/* Desktop: task title previews */}
+                    <div className="hidden md:flex flex-col gap-0.5">
+                      {dayTasks.slice(0, 2).map((t) => (
+                        <span
+                          key={t._id}
+                          className={`text-[9px] leading-tight truncate px-1 py-px rounded-[2px] ${WORKSTREAM_CONFIG[t.workstream].bgClass} ${WORKSTREAM_CONFIG[t.workstream].textClass}`}
+                        >
+                          {t.title}
+                        </span>
+                      ))}
+                      {dayTasks.length > 2 && (
+                        <span className="text-[9px] text-text-muted px-1">
+                          +{dayTasks.length - 2}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )}
               </button>
@@ -217,7 +226,7 @@ export default function CalendarPage() {
 
         {/* Selected day task list */}
         {selectedDate && (
-          <div className="mt-3 bg-surface rounded-[14px] border border-border p-3">
+          <div className="bg-surface rounded-[10px] border border-border p-3">
             <div className="flex items-center justify-between mb-2">
               <p className="text-[13px] font-medium text-text-primary">
                 {new Date(selectedDate + "T12:00:00").toLocaleDateString("en-US", {

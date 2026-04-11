@@ -71,7 +71,7 @@ export default function TodayPage() {
 
   return (
     <AppShell>
-      <div className="max-w-lg mx-auto px-4 py-6">
+      <div className="max-w-2xl mx-auto px-4 py-5">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-[15px] font-medium text-text-primary">Today</h1>

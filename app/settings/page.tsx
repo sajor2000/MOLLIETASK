@@ -143,9 +143,7 @@ export default function SettingsPage() {
 
   return (
     <AppShell>
-      <div className="max-w-lg mx-auto px-6 py-8 space-y-8">
-        <h1 className="text-[15px] font-medium text-text-primary">Settings</h1>
-
+      <div className="max-w-lg mx-auto px-4 md:px-6 py-5 md:py-8 space-y-5 md:space-y-6">
         {error && (
           <p className="text-[12px] text-destructive bg-destructive/10 border border-destructive/20 rounded-[4px] px-3 py-2">
             {error}
@@ -423,7 +421,7 @@ export default function SettingsPage() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div>
+    <div className="bg-surface rounded-[10px] border border-border p-4">
       <label className="text-[11px] font-medium text-text-secondary uppercase tracking-widest block mb-3">
         {title}
       </label>

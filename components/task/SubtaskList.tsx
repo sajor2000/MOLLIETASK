@@ -75,7 +75,7 @@ function SortableSubtaskItem({
       {/* Checkbox */}
       <button
         onClick={() => onToggle(subtask._id)}
-        className={`shrink-0 w-[16px] h-[16px] rounded-[3px] border flex items-center justify-center transition-colors duration-200 ${
+        className={`shrink-0 w-[20px] h-[20px] rounded-[3px] border flex items-center justify-center transition-colors duration-200 ${
           subtask.isComplete
             ? "bg-success/20 border-success/40"
             : "border-text-muted/30 hover:border-accent"
@@ -83,7 +83,7 @@ function SortableSubtaskItem({
         aria-label={`${subtask.isComplete ? "Uncheck" : "Check"} ${subtask.title}`}
       >
         {subtask.isComplete && (
-          <Icon name="check" className="w-[11px] h-[11px] text-success" />
+          <Icon name="check" className="w-[13px] h-[13px] text-success" />
         )}
       </button>
 
@@ -98,13 +98,13 @@ function SortableSubtaskItem({
         {subtask.title}
       </span>
 
-      {/* Delete button */}
+      {/* Delete button — always visible on mobile, hover-reveal on desktop */}
       <button
         onClick={() => onDelete(subtask._id)}
-        className="shrink-0 opacity-0 group-hover:opacity-100 text-text-muted hover:text-destructive transition-all duration-200"
+        className="shrink-0 p-1 opacity-60 md:opacity-0 md:group-hover:opacity-100 text-text-muted hover:text-destructive transition-all duration-200"
         aria-label={`Delete ${subtask.title}`}
       >
-        <Icon name="close" className="w-[14px] h-[14px]" />
+        <Icon name="close" className="w-4 h-4" />
       </button>
     </div>
   );
@@ -219,7 +219,7 @@ export function SubtaskList({ parentTaskId, readOnly = false }: SubtaskListProps
               <div key={subtask._id} className="flex items-center gap-2 py-1.5">
                 <button
                   onClick={() => handleToggle(subtask._id)}
-                  className={`shrink-0 w-[16px] h-[16px] rounded-[3px] border flex items-center justify-center transition-colors duration-200 ${
+                  className={`shrink-0 w-[20px] h-[20px] rounded-[3px] border flex items-center justify-center transition-colors duration-200 ${
                     subtask.isComplete
                       ? "bg-success/20 border-success/40"
                       : "border-text-muted/30 hover:border-accent"
@@ -227,7 +227,7 @@ export function SubtaskList({ parentTaskId, readOnly = false }: SubtaskListProps
                   aria-label={`${subtask.isComplete ? "Uncheck" : "Check"} ${subtask.title}`}
                 >
                   {subtask.isComplete && (
-                    <Icon name="check" className="w-[11px] h-[11px] text-success" />
+                    <Icon name="check" className="w-[13px] h-[13px] text-success" />
                   )}
                 </button>
                 <span
@@ -270,7 +270,7 @@ export function SubtaskList({ parentTaskId, readOnly = false }: SubtaskListProps
       {/* Add subtask input */}
       {!readOnly && !atMax && (
         <div className="flex items-center gap-2">
-          <Icon name="add" className="w-[14px] h-[14px] text-text-muted/40 shrink-0" />
+          <Icon name="add" className="w-4 h-4 text-text-muted/40 shrink-0" />
           <input
             ref={inputRef}
             type="text"
@@ -279,13 +279,13 @@ export function SubtaskList({ parentTaskId, readOnly = false }: SubtaskListProps
             onKeyDown={handleKeyDown}
             placeholder="Add subtask..."
             maxLength={200}
-            className="flex-1 bg-transparent text-[13px] text-text-primary placeholder:text-text-muted/50 focus:outline-none py-1"
+            className="flex-1 bg-transparent text-[14px] md:text-[13px] text-text-primary placeholder:text-text-muted/50 focus:outline-none py-2 md:py-1"
           />
           {newTitle.trim() && (
             <button
               type="button"
               onClick={handleAdd}
-              className="text-[12px] text-accent hover:opacity-80 transition-opacity"
+              className="px-3 py-1.5 text-[13px] text-accent bg-accent/10 rounded-[4px] active:scale-95 transition-colors"
             >
               Add
             </button>

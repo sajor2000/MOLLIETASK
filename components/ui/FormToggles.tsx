@@ -18,7 +18,7 @@ export function WorkstreamPicker({ value, onChange }: WorkstreamPickerProps) {
           type="button"
           onClick={onChange ? () => onChange(ws) : undefined}
           disabled={!onChange}
-          className={`flex-1 py-1.5 text-[13px] rounded-[4px] transition-all duration-200 ${
+          className={`flex-1 py-2.5 md:py-1.5 text-[13px] rounded-[4px] transition-all duration-200 ${
             value === ws
               ? "bg-surface text-accent"
               : "text-text-muted hover:text-text-secondary"
@@ -45,7 +45,7 @@ export function PriorityPicker({ value, onChange }: PriorityPickerProps) {
           type="button"
           onClick={onChange ? () => onChange(p) : undefined}
           disabled={!onChange}
-          className={`flex-1 py-1.5 text-[13px] rounded-[4px] transition-all duration-200 ${
+          className={`flex-1 py-2.5 md:py-1.5 text-[13px] rounded-[4px] transition-all duration-200 ${
             value === p
               ? p === "high"
                 ? "bg-destructive/15 text-destructive"
@@ -73,7 +73,7 @@ export function RecurringPicker({ value, onChange }: RecurringPickerProps) {
           key={r ?? "none"}
           type="button"
           onClick={() => onChange(r)}
-          className={`flex-1 py-1.5 text-[12px] rounded-[4px] transition-all duration-200 ${
+          className={`flex-1 py-2.5 md:py-1.5 text-[12px] rounded-[4px] transition-all duration-200 ${
             value === r
               ? "bg-surface text-accent"
               : "text-text-muted hover:text-text-secondary"

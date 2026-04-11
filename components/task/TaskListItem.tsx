@@ -13,10 +13,10 @@ export function TaskListItem({
   const wsConfig = WORKSTREAM_CONFIG[task.workstream];
 
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 rounded-[4px] bg-surface hover:bg-surface-elevated transition-colors duration-200 group">
+    <div className="flex items-center gap-3 px-3 py-3 md:py-2.5 rounded-[4px] bg-surface hover:bg-surface-elevated active:bg-surface-elevated transition-colors duration-200 group">
       <button
         onClick={() => onComplete(task._id)}
-        className="flex-shrink-0 w-5 h-5 rounded-full border-2 border-border hover:border-accent transition-colors duration-200"
+        className="flex-shrink-0 w-6 h-6 md:w-5 md:h-5 rounded-full border-2 border-border hover:border-accent transition-colors duration-200"
         aria-label="Complete task"
       />
       <button onClick={() => onEdit(task)} className="flex-1 min-w-0 text-left">

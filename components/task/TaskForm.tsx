@@ -171,7 +171,7 @@ export function TaskForm({
                 type="button"
                 onClick={readOnly ? undefined : () => setStatus(s)}
                 disabled={readOnly}
-                className={`flex-1 py-1.5 text-[13px] rounded-[4px] transition-all duration-200 ${
+                className={`flex-1 py-2.5 md:py-1.5 text-[13px] rounded-[4px] transition-all duration-200 ${
                   status === s
                     ? "bg-surface text-accent"
                     : "text-text-muted hover:text-text-secondary"
@@ -206,7 +206,7 @@ export function TaskForm({
                   setAssignedStaffId(match ? match._id : null);
                 }}
                 disabled={readOnly}
-                className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark] disabled:opacity-60"
+                className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-3 md:py-2 text-[14px] md:text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark] disabled:opacity-60"
               >
                 <option value="">Unassigned</option>
                 {[...staffMembers]
@@ -218,8 +218,8 @@ export function TaskForm({
                   ))}
               </select>
               {staffSlots.length > 0 && (
-                <p className="text-[11px] text-text-muted mt-2 leading-relaxed">
-                  Keys 1–9 assign (order on Team page). 0 clears. Disabled while typing in a field.
+                <p className="hidden md:block text-[11px] text-text-muted mt-2 leading-relaxed">
+                  Keys 1–9 assign (order on Team page). 0 clears.
                 </p>
               )}
             </>
@@ -237,7 +237,7 @@ export function TaskForm({
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
               readOnly={readOnly}
-              className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
+              className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-3 md:py-2 text-[14px] md:text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
             />
           </div>
           <div>
@@ -250,7 +250,7 @@ export function TaskForm({
               onChange={(e) => setDueTime(e.target.value)}
               disabled={!dueDate}
               readOnly={readOnly}
-              className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-2 text-[13px] text-text-primary disabled:opacity-40 focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
+              className="w-full bg-bg-base border border-border/15 rounded-[4px] px-3 py-3 md:py-2 text-[14px] md:text-[13px] text-text-primary disabled:opacity-40 focus:outline-none focus:border-accent transition-colors duration-200 [color-scheme:dark]"
             />
           </div>
         </div>
@@ -271,7 +271,7 @@ export function TaskForm({
                   d.setDate(d.getDate() + offset);
                   setDueDate(toDateInputValue(d.getTime()));
                 }}
-                className="px-3 py-1 text-[12px] text-text-secondary bg-bg-base border border-border/15 rounded-[4px] hover:border-accent/30 transition-colors duration-200"
+                className="px-4 py-2.5 md:px-3 md:py-1 text-[13px] md:text-[12px] text-text-secondary bg-bg-base border border-border/15 rounded-[4px] hover:border-accent/30 active:scale-95 transition-colors duration-200"
               >
                 {label}
               </button>
