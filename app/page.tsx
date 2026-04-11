@@ -97,7 +97,19 @@ export default function KanbanPage() {
   if (tasks === undefined) {
     return (
       <AppShell onAddTask={isMember ? undefined : () => setIsCreating(true)}>
-        <div className="flex gap-0 h-full overflow-x-auto">
+        {/* Mobile skeleton: single column */}
+        <div className="md:hidden px-3 py-4">
+          <div className="flex gap-1 bg-bg-base rounded-[4px] p-1 mx-1 mb-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex-1 h-8 bg-surface rounded-[4px] animate-pulse" />
+            ))}
+          </div>
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-[72px] bg-surface rounded-[4px] mb-2 animate-pulse" />
+          ))}
+        </div>
+        {/* Desktop skeleton: 3 columns */}
+        <div className="hidden md:flex gap-0 h-full">
           {["todo", "inprogress", "done"].map((col) => (
             <div key={col} className="flex-1 min-w-[280px] px-3 py-4">
               <div className="h-4 w-20 bg-surface rounded animate-pulse mb-4" />

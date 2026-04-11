@@ -15,6 +15,7 @@ import {
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { KanbanColumn } from "./KanbanColumn";
+import { MobileStatusTabs } from "./MobileStatusTabs";
 import { TaskCard } from "./TaskCard";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { COLUMN_ORDER, TaskStatus } from "@/lib/constants";
@@ -43,6 +44,7 @@ export const KanbanBoard = memo(function KanbanBoard({
   onClearCompleted,
 }: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [mobileTab, setMobileTab] = useState<TaskStatus>("todo");
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -127,6 +129,49 @@ export const KanbanBoard = memo(function KanbanBoard({
     }
   }, [taskMap, tasksByStatus, onMoveTask]);
 
+  const taskCounts = useMemo(
+    () => ({
+      todo: tasksByStatus.todo.length,
+      inprogress: tasksByStatus.inprogress.length,
+      done: tasksByStatus.done.length,
+    }),
+    [tasksByStatus],
+  );
+
+  const handleStatusAdvance = useCallback(
+    (taskId: Id<"tasks">) => {
+      const task = taskMap.get(taskId as string);
+      if (!task) return;
+      if (task.status === "todo" && onMoveTask) {
+        const ipTasks = tasksByStatus.inprogress;
+        const newSort =
+          ipTasks.length > 0
+            ? ipTasks[ipTasks.length - 1].sortOrder + SORT_ORDER_GAP
+            : SORT_ORDER_GAP;
+        onMoveTask(taskId, "inprogress", newSort);
+      } else if (task.status === "inprogress") {
+        onCompleteTask(taskId);
+      }
+    },
+    [taskMap, tasksByStatus, onMoveTask, onCompleteTask],
+  );
+
+  const handleStatusRegress = useCallback(
+    (taskId: Id<"tasks">) => {
+      const task = taskMap.get(taskId as string);
+      if (!task || !onMoveTask) return;
+      if (task.status === "inprogress") {
+        const todoTasks = tasksByStatus.todo;
+        const newSort =
+          todoTasks.length > 0
+            ? todoTasks[todoTasks.length - 1].sortOrder + SORT_ORDER_GAP
+            : SORT_ORDER_GAP;
+        onMoveTask(taskId, "todo", newSort);
+      }
+    },
+    [taskMap, tasksByStatus, onMoveTask],
+  );
+
   const activeTask = activeId ? taskMap.get(activeId) ?? null : null;
 
   return (
@@ -136,7 +181,32 @@ export const KanbanBoard = memo(function KanbanBoard({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex gap-0 h-full overflow-x-auto snap-x snap-mandatory md:snap-none md:overflow-x-visible">
+      {/* Mobile: tabbed single-column view */}
+      <div className="flex flex-col h-full md:hidden">
+        <MobileStatusTabs
+          activeStatus={mobileTab}
+          onStatusChange={setMobileTab}
+          taskCounts={taskCounts}
+        />
+        <div className="flex-1 min-h-0">
+          <KanbanColumn
+            key={mobileTab}
+            status={mobileTab}
+            tasks={tasksByStatus[mobileTab]}
+            staffById={staffById}
+            onEditTask={onEditTask}
+            onCompleteTask={onCompleteTask}
+            onClearCompleted={mobileTab === "done" ? onClearCompleted : undefined}
+            draggable={!!onMoveTask}
+            swipeable={!!onMoveTask}
+            onStatusAdvance={handleStatusAdvance}
+            onStatusRegress={handleStatusRegress}
+          />
+        </div>
+      </div>
+
+      {/* Desktop: unchanged 3-column layout */}
+      <div className="hidden md:flex gap-0 h-full">
         {COLUMN_ORDER.map((status) => (
           <KanbanColumn
             key={status}

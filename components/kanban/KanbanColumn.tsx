@@ -7,6 +7,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { TaskCard } from "./TaskCard";
+import { SwipeableTaskCard } from "./SwipeableTaskCard";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { TaskStatus, STATUS_CONFIG } from "@/lib/constants";
 import { staffInitials } from "@/lib/staffUtils";
@@ -19,6 +20,9 @@ interface KanbanColumnProps {
   onCompleteTask: (taskId: Id<"tasks">) => void;
   onClearCompleted?: () => void;
   draggable?: boolean;
+  swipeable?: boolean;
+  onStatusAdvance?: (taskId: Id<"tasks">) => void;
+  onStatusRegress?: (taskId: Id<"tasks">) => void;
 }
 
 export const KanbanColumn = memo(function KanbanColumn({
@@ -29,6 +33,9 @@ export const KanbanColumn = memo(function KanbanColumn({
   onCompleteTask,
   onClearCompleted,
   draggable = true,
+  swipeable = false,
+  onStatusAdvance,
+  onStatusRegress,
 }: KanbanColumnProps) {
   const config = STATUS_CONFIG[status];
   const { setNodeRef, isOver } = useDroppable({ id: status });
@@ -37,7 +44,7 @@ export const KanbanColumn = memo(function KanbanColumn({
 
   return (
     <div
-      className={`flex flex-col min-w-[85vw] md:min-w-0 md:flex-1 snap-center ${
+      className={`flex flex-col w-full md:min-w-0 md:flex-1 ${
         isOver ? "bg-accent/5" : ""
       } transition-colors duration-150`}
     >
@@ -95,11 +102,23 @@ export const KanbanColumn = memo(function KanbanColumn({
             const staff = task.assignedStaffId
               ? staffById.get(task.assignedStaffId)
               : undefined;
-            return (
+            const initials = staff ? staffInitials(staff.name) : undefined;
+            return swipeable ? (
+              <SwipeableTaskCard
+                key={task._id}
+                task={task}
+                assigneeInitials={initials}
+                onEdit={onEditTask}
+                onComplete={onCompleteTask}
+                draggable={draggable}
+                onStatusAdvance={onStatusAdvance}
+                onStatusRegress={onStatusRegress}
+              />
+            ) : (
               <TaskCard
                 key={task._id}
                 task={task}
-                assigneeInitials={staff ? staffInitials(staff.name) : undefined}
+                assigneeInitials={initials}
                 onEdit={onEditTask}
                 onComplete={onCompleteTask}
                 draggable={draggable}
