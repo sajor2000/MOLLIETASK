@@ -8,11 +8,12 @@ import { AppShell } from "@/components/layout/AppShell";
 import { TaskListItem } from "@/components/task/TaskListItem";
 import { TaskOverlays } from "@/components/task/TaskOverlays";
 import { Icon } from "@/components/ui/Icon";
-import { WORKSTREAM_CONFIG } from "@/lib/constants";
-import type { TaskFormData } from "@/lib/constants";
+import { WORKSTREAM_CONFIG, type TaskFormData } from "@/lib/constants";
 import { toCSTDateString, fromDateInputValue } from "@/lib/dates";
 import { useTaskActions } from "@/hooks/useTaskActions";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { useWorkstreamFilter } from "@/hooks/useWorkstreamFilter";
+import { WorkstreamFilter } from "@/components/ui/WorkstreamFilter";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = [
@@ -26,6 +27,7 @@ export default function CalendarPage() {
   const [viewDate, setViewDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [todayStr] = useState(() => toCSTDateString(Date.now()));
+  const { workstreamFilter, setWorkstreamFilter } = useWorkstreamFilter();
 
   // Compute date range for the visible month (up to 6 days overflow on each side)
   const { rangeStart, rangeEnd } = useMemo(() => {
@@ -58,10 +60,13 @@ export default function CalendarPage() {
     clearError,
   } = useTaskActions(tasks);
 
-  // Group tasks by CST date string (server already filtered to the visible range)
+  // Group tasks by CST date string, applying workstream filter in a single pass
   const tasksByDate = useMemo(() => {
+    const source = workstreamFilter
+      ? (tasks ?? []).filter((t) => t.workstream === workstreamFilter)
+      : (tasks ?? []);
     const map = new Map<string, Doc<"tasks">[]>();
-    for (const t of tasks ?? []) {
+    for (const t of source) {
       if (!t.dueDate) continue;
       const dateStr = toCSTDateString(t.dueDate);
       const list = map.get(dateStr) ?? [];
@@ -69,7 +74,7 @@ export default function CalendarPage() {
       map.set(dateStr, list);
     }
     return map;
-  }, [tasks]);
+  }, [tasks, workstreamFilter]);
 
   // Calendar grid for current month
   const calendarDays = useMemo(() => {
@@ -153,6 +158,9 @@ export default function CalendarPage() {
           </button>
         </div>
 
+        {/* Workstream filter */}
+        <WorkstreamFilter value={workstreamFilter} onChange={setWorkstreamFilter} />
+
         {/* Day headers */}
         <div className="grid grid-cols-7 px-0.5">
           {DAYS.map((d) => (
@@ -202,14 +210,17 @@ export default function CalendarPage() {
                     </span>
                     {/* Desktop: task title previews */}
                     <div className="hidden md:flex flex-col gap-0.5">
-                      {dayTasks.slice(0, 2).map((t) => (
-                        <span
-                          key={t._id}
-                          className={`text-[9px] leading-tight truncate px-1 py-px rounded-[2px] ${WORKSTREAM_CONFIG[t.workstream].bgClass} ${WORKSTREAM_CONFIG[t.workstream].textClass}`}
-                        >
-                          {t.title}
-                        </span>
-                      ))}
+                      {dayTasks.slice(0, 2).map((t) => {
+                        const wsCfg = WORKSTREAM_CONFIG[t.workstream];
+                        return (
+                          <span
+                            key={t._id}
+                            className={`text-[9px] leading-tight truncate px-1 py-px rounded-[2px] ${wsCfg.bgClass} ${wsCfg.textClass}`}
+                          >
+                            {t.title}
+                          </span>
+                        );
+                      })}
                       {dayTasks.length > 2 && (
                         <span className="text-[9px] text-text-muted px-1">
                           +{dayTasks.length - 2}
@@ -247,7 +258,11 @@ export default function CalendarPage() {
             </div>
 
             {selectedTasks.length === 0 ? (
-              <p className="text-[12px] text-text-muted py-3 text-center">No tasks on this day</p>
+              <p className="text-[12px] text-text-muted py-3 text-center">
+                {workstreamFilter
+                  ? `No ${WORKSTREAM_CONFIG[workstreamFilter].label} tasks on this day`
+                  : "No tasks on this day"}
+              </p>
             ) : (
               <div className="space-y-1">
                 {selectedTasks.map((task) => (

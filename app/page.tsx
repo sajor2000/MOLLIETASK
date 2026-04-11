@@ -11,6 +11,8 @@ import type { Doc } from "@/convex/_generated/dataModel";
 import type { TaskFormData } from "@/lib/constants";
 import { useTaskActions } from "@/hooks/useTaskActions";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { useWorkstreamFilter } from "@/hooks/useWorkstreamFilter";
+import { WorkstreamFilter } from "@/components/ui/WorkstreamFilter";
 
 const AiCaptureBar = dynamic(
   () => import("@/components/task/AiCaptureBar").then((m) => ({ default: m.AiCaptureBar })),
@@ -46,12 +48,19 @@ export default function KanbanPage() {
   const [prefillData, setPrefillData] = useState<Partial<TaskFormData> | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState("");
   const [showTemplates, setShowTemplates] = useState(false);
+  const { workstreamFilter, setWorkstreamFilter } = useWorkstreamFilter();
 
   const filteredTasks = useMemo(() => {
-    if (!tasks || !searchQuery.trim()) return tasks;
-    const q = searchQuery.toLowerCase();
-    return tasks.filter((t) => t.title.toLowerCase().includes(q));
-  }, [tasks, searchQuery]);
+    if (!tasks) return tasks;
+    const hasSearch = searchQuery.trim().length > 0;
+    if (!hasSearch && !workstreamFilter) return tasks;
+    const q = hasSearch ? searchQuery.toLowerCase() : "";
+    return tasks.filter((t) => {
+      if (hasSearch && !t.title.toLowerCase().includes(q)) return false;
+      if (workstreamFilter && t.workstream !== workstreamFilter) return false;
+      return true;
+    });
+  }, [tasks, searchQuery, workstreamFilter]);
 
   const staffKey = staffList?.map((s) => s._id).join(",") ?? "";
   const staffById = useMemo(() => {
@@ -157,6 +166,10 @@ export default function KanbanPage() {
             />
           </div>
         )}
+        {/* Workstream filter chips */}
+        <div className="shrink-0 border-b border-border/30">
+          <WorkstreamFilter value={workstreamFilter} onChange={setWorkstreamFilter} className="px-4 py-2" />
+        </div>
         <div className="flex-1 min-h-0">
           <KanbanBoard
             tasks={filteredTasks ?? []}

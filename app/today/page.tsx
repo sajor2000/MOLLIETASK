@@ -12,6 +12,8 @@ import { Icon } from "@/components/ui/Icon";
 import type { TaskFormData } from "@/lib/constants";
 import { useTaskActions } from "@/hooks/useTaskActions";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { useWorkstreamFilter } from "@/hooks/useWorkstreamFilter";
+import { WorkstreamFilter } from "@/components/ui/WorkstreamFilter";
 
 export default function TodayPage() {
   const { isOwner, isMember } = useWorkspace();
@@ -40,24 +42,25 @@ export default function TodayPage() {
   } = useTaskActions(tasks);
 
   const [todayStr] = useState(() => toCSTDateString(Date.now()));
+  const { workstreamFilter, setWorkstreamFilter } = useWorkstreamFilter();
 
   const { overdue, today, noDueDate } = useMemo(() => {
+    const source = workstreamFilter
+      ? (tasks ?? []).filter((t) => t.workstream === workstreamFilter)
+      : (tasks ?? []);
     const overdue: Doc<"tasks">[] = [];
     const today: Doc<"tasks">[] = [];
     const noDueDate: Doc<"tasks">[] = [];
-
-    for (const t of tasks ?? []) {
-      if (!t.dueDate) {
-        noDueDate.push(t);
-      } else {
+    for (const t of source) {
+      if (!t.dueDate) noDueDate.push(t);
+      else {
         const dateStr = toCSTDateString(t.dueDate);
         if (dateStr < todayStr) overdue.push(t);
         else if (dateStr === todayStr) today.push(t);
       }
     }
-
     return { overdue, today, noDueDate };
-  }, [tasks, todayStr]);
+  }, [tasks, workstreamFilter, todayStr]);
 
   const handleAddToday = () => {
     setIsCreating(true);
@@ -92,6 +95,8 @@ export default function TodayPage() {
             </button>
           )}
         </div>
+
+        <WorkstreamFilter value={workstreamFilter} onChange={setWorkstreamFilter} className="mb-2" />
 
         {tasks === undefined ? (
           <div className="space-y-3 py-6">
