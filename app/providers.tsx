@@ -23,8 +23,9 @@ function AuthDebug() {
   const convexAuth = useConvexAuth();
 
   useEffect(() => {
+    if (!clerkAuth.isLoaded) return;
+
     console.log("[AuthDebug] Clerk:", {
-      isLoaded: clerkAuth.isLoaded,
       isSignedIn: clerkAuth.isSignedIn,
       userId: clerkAuth.userId,
     });
@@ -33,23 +34,35 @@ function AuthDebug() {
       isAuthenticated: convexAuth.isAuthenticated,
     });
 
-    if (clerkAuth.isSignedIn && clerkAuth.getToken) {
-      clerkAuth.getToken({ template: "convex" }).then((token) => {
+    if (!clerkAuth.isSignedIn) return;
+
+    // Check which path ConvexProviderWithClerk actually uses
+    const sessionAud = clerkAuth.sessionClaims?.aud;
+    console.log("[AuthDebug] SDK path:", sessionAud === "convex" ? "session-token" : "jwt-template", "| sessionClaims.aud:", sessionAud);
+
+    const tokenPromise =
+      sessionAud === "convex"
+        ? clerkAuth.getToken()
+        : clerkAuth.getToken({ template: "convex" });
+
+    tokenPromise
+      .then((token) => {
         if (!token) {
-          console.log("[AuthDebug] Convex JWT token: NULL — template missing");
+          console.error(
+            sessionAud === "convex"
+              ? "[AuthDebug] Session token NULL — check Convex integration in Clerk Dashboard"
+              : "[AuthDebug] JWT template NULL — activate Convex integration at https://dashboard.clerk.com/apps/setup/convex",
+          );
           return;
         }
         try {
           const payload = JSON.parse(atob(token.split(".")[1]));
-          console.log("[AuthDebug] JWT claims:", { iss: payload.iss, aud: payload.aud, sub: payload.sub });
-          console.log("[AuthDebug] auth.config expects domain: https://literate-dingo-92.clerk.accounts.dev, applicationID: convex");
+          console.log("[AuthDebug] Token OK:", { iss: payload.iss, aud: payload.aud, sub: payload.sub, exp: new Date(payload.exp * 1000).toISOString() });
         } catch {
-          console.log("[AuthDebug] token exists but could not decode");
+          console.log("[AuthDebug] Token exists but could not decode");
         }
-      }).catch((err) => {
-        console.error("[AuthDebug] getToken error:", err);
-      });
-    }
+      })
+      .catch((err) => console.error("[AuthDebug] getToken error:", err));
   }, [clerkAuth.isLoaded, clerkAuth.isSignedIn, convexAuth.isAuthenticated]);
 
   return null;
